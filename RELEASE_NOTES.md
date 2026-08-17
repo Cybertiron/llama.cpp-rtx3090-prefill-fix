@@ -37,5 +37,6 @@ llama-server -m model.gguf --flash-attn on --cache-type-k q3_K --cache-type-v q3
 - `q3_K` KV needs `n_embd_k_gqa % 256 == 0` (K-quant super-block size).
 - `llama-bench` also accepts `-ctk q3_K` / `-ctv q3_K`.
 
-Built on [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp). See the branch
-`fix-27109-quant-kv-fp16` for the changes.
+Built on [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp). The `q3_K` KV type lives on
+the `q3k-kv-experimental` branch (this release); the standalone `#27109` prefill fix lives on
+`fix-27109-quant-kv-fp16` and is submitted upstream as PR #27140.

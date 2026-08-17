@@ -110,7 +110,9 @@ cmake -B build -DGGML_CUDA=ON
 cmake --build build --config Release -j
 ```
 
-Both features live in the `fix-27109-quant-kv-fp16` branch. The `q3_K` KV type touches the CUDA
+The `q3_K` KV type lives on the experimental `q3k-kv-experimental` branch (this release); the
+standalone `#27109` prefill fix lives on `fix-27109-quant-kv-fp16` and is submitted upstream as
+PR [#27140](https://github.com/ggml-org/llama.cpp/pull/27140). The `q3_K` KV type touches the CUDA
 KV-cache paths (cache-type parsing, the SET_ROWS quantized write, the Flash-Attention support gate and
 f16 conversion, and the non-contiguous q3_K→f16 dequant for the KV view), plus `llama-bench` so it
 accepts `-ctk q3_K` / `-ctv q3_K`.
