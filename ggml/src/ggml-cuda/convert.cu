@@ -377,7 +377,7 @@ static void dequantize_row_q3_K_cuda(const void * vx, dst_t * y, const int64_t k
     dequantize_block_q3_K<<<nb, 64, 0, stream>>>(vx, y);
 }
 
-// q3_K non-contiguous dequant (KV cache view): super-block'ai contiguous eilutej, row-stride s0x (block-units)
+// q3_K non-contiguous dequant (KV cache view): super-blocks are contiguous within a row, row stride s0x (in block units)
 template<typename dst_t>
 static __global__ void dequantize_block_q3_K_nc(
         const void * __restrict__ vx, dst_t * __restrict__ y,

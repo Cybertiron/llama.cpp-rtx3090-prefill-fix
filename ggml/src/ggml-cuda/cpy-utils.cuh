@@ -43,14 +43,14 @@ static __device__ void quantize_f32_q4_0_block(const float * __restrict__ x, blo
     }
 }
 
-// ---- q3_K KV cache write: kvantuoja viena 256-super-block (verbatim quantize_row_q3_K_ref portas) ----
+// ---- q3_K KV cache write: quantize one 256-element super-block (verbatim port of quantize_row_q3_K_ref) ----
 static __device__ __forceinline__ int q3k_nearest_int(float fval) {
     fval = fval + 12582912.0f;
     int i = __float_as_int(fval);
     return (i & 0x007fffff) - 0x00400000;
 }
 
-// make_q3_quants(16, 4, x, L, do_rmse=true): grazina scale, uzpildo L (continue-atvejui)
+// make_q3_quants(16, 4, x, L, do_rmse=true): returns the scale and fills L (for the continue case)
 static __device__ float q3k_make_scale16(const float * __restrict__ x, int8_t * __restrict__ L) {
     const int n = 16, nmax = 4;
     float maxv = 0.0f, amax = 0.0f;

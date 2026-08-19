@@ -348,7 +348,7 @@ static bool ggml_cuda_fattn_kv_type_supported(ggml_type type) {
 #endif // GGML_CUDA_FA_ALL_QUANTS
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q8_0:
-        case GGML_TYPE_Q3_K:   // q3 KV: dequant'inamas per f16 kelia (need_f16_K)
+        case GGML_TYPE_Q3_K:   // q3 KV: dequantized via the f16 path (need_f16_K)
         case GGML_TYPE_BF16:
             return true;
         default:
@@ -555,7 +555,7 @@ size_t ggml_cuda_flash_attn_ext_get_alloc_size(int device, const ggml_tensor * d
             need_f16_V = true;
             break;
         case BEST_FATTN_KERNEL_VEC:
-            // q3_K neturi VEC kernel dequant - priverst f16 konversija (kaip F32)
+            // q3_K has no VEC-kernel dequant, so force the f16 conversion (like F32)
             need_f16_K = K->type == GGML_TYPE_F32 || K->type == GGML_TYPE_Q3_K;
             need_f16_V = V->type == GGML_TYPE_F32 || V->type == GGML_TYPE_Q3_K;
             break;
