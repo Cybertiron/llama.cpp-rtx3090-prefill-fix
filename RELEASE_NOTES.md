@@ -1,40 +1,45 @@
 # q3_K KV cache type (experimental)
 
-Adds **`q3_K` as a KV cache type** for the CUDA backend — a 3.4375-bit KV cache option:
+Adds `q3_K` (3.4375 bits/elem) as a KV cache type on the CUDA backend, for
+squeezing more context out of limited VRAM:
 
-```bash
-llama-server -m model.gguf --flash-attn on --cache-type-k q3_K --cache-type-v q3_K
-```
+    llama-server --flash-attn on --cache-type-k q3_K --cache-type-v q3_K
 
-This is the standalone experimental container for the q3_K work. It is intentionally kept **separate
-from the `#27109` quantized-KV prefill fix** — that fix is its own change and lives upstream in PR
-[ggml-org/llama.cpp#27140](https://github.com/ggml-org/llama.cpp/pull/27140). This release builds on
-that fix and adds q3_K on top; the fix itself is not part of what this release contributes.
+- ~24% smaller KV cache than `q4_0`, ~78% smaller than `f16` — smaller cards fit
+  more context for the same VRAM.
+- Same prefill speed as `q4_0` (pp4096 on RTX 3090: q3_K 967 t/s vs q4_0 966 t/s).
+- Reuses the existing `q3_K` K-quant machinery — no new ggml type.
+- Requires `n_embd_k_gqa % 256 == 0` (K-quant super-block size).
 
-## What q3_K gives you
+## Download (if you don't want to compile)
 
-- **~24 % less KV-cache VRAM** than `q4_0` (3.44 bit vs 4.5 bit), ~78 % less than `f16` — smaller
-  cards fit more context for the same VRAM.
-- **Same prefill speed as `q4_0`** — identical at every context length (938 / 854 / 685 tok/s at
-  4K / 16K / 64K on an RTX 3090; the KV-quant type does not affect prefill).
-- **Perfect long-context recall** — 10/10 needles found at 256K context on Qwen 27B, matching `q4_0`.
-- **Near-lossless quality** — Qwen 27B perplexity penalty ≈ 0.13 % vs `f16` (`q4_0` is lossless), and
-  the penalty does not grow with context. Reuses the existing `q3_K` K-quant — no new ggml type.
+`llama-q3k-win-cuda13-ampere.zip` below is a standalone Windows / CUDA 13 build for
+RTX 3090 (Ampere, arch 86). Unzip and run `llama-server.exe` with the flags above —
+no compiling, CUDA runtime DLLs are included.
 
-> KV-quant sensitivity is mostly a small-model artifact — small models (e.g. 1.5B) can degrade badly
-> under `q3_K`/`q4_0` KV, while a 27B tolerates it. Validate on your own model.
+## Quality (Qwen3 27B, RTX 3090)
+
+- Perplexity within ~0.13% of `f16` (`q4_0` is lossless); the penalty does not grow
+  with context.
+- Needle-in-haystack: 10/10 secrets recalled at 256K context, same as `q4_0`.
+
+## Implementation
+
+cache-type parsing (arg.cpp), SET_ROWS quantized write (cpy-utils / set-rows /
+supports_op), flash-attn support gate + f16 conversion (fattn.cu), and a
+non-contiguous q3_K->f16 dequant for the strided KV view (convert.cu).
+`llama-bench` accepts `-ctk`/`-ctv q3_K`.
 
 ## Acknowledgements
 
-The `q3_K` quantization format itself is [@ikawrakow](https://github.com/ikawrakow)'s k-quant work.
-This release only wires that existing quant into the KV-cache path — it does not add a new
-quantization scheme.
+The `q3_K` quantization format itself is [@ikawrakow](https://github.com/ikawrakow)'s
+k-quant work. This release only wires that existing quant into the KV-cache path — it
+does not add a new quantization scheme.
 
 ## Notes
 
 - CUDA backend, tested on RTX 3090 (Ampere); Flash Attention required.
-- `q3_K` KV needs `n_embd_k_gqa % 256 == 0` (K-quant super-block size).
-- `llama-bench` also accepts `-ctk q3_K` / `-ctv q3_K`.
-- Branch: `q3k-kv-experimental`. Built on top of the `#27109` prefill fix
-  ([ggml-org/llama.cpp#27140](https://github.com/ggml-org/llama.cpp/pull/27140)), which is the
-  separate upstream contribution — this container is the q3_K experiment only.
+- Submitted upstream as a standalone PR: [ggml-org/llama.cpp#27362](https://github.com/ggml-org/llama.cpp/pull/27362).
+- The prebuilt binary above is also based on the `#27109` quantized-KV prefill fix
+  ([ggml-org/llama.cpp#27140](https://github.com/ggml-org/llama.cpp/pull/27140)) —
+  that fix is a separate upstream contribution; q3_K itself does not depend on it.
