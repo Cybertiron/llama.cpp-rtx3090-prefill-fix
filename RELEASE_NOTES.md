@@ -50,6 +50,16 @@ The `q3_K` quantization format itself is [@ikawrakow](https://github.com/ikawrak
 k-quant work. This release only wires that existing quant into the KV-cache path — it
 does not add a new quantization scheme.
 
+## Also: q2_K (experimental)
+
+The same build also wires `q2_K` (~2.6 bpw) in as a KV cache type
+(`--cache-type-k q2_K --cache-type-v q2_K`), for extreme VRAM squeezing — ~24 % smaller
+than `q3_K`. It needs a super-block-scale clamp to stay finite (q2_K's `d = max_scale/15`
+overflows f16 on large KV values otherwise). It works at moderate context (Qwen3 27B, 16K
+perplexity ~+2.4 % vs f16) but is **too aggressive for long context** — a 256K
+needle-in-haystack run crashes at the first decode step after the prefill. Treat `q3_K` as
+the practical lower bound; `q2_K` is an emergency option only.
+
 ## Notes
 
 - CUDA backend, tested on RTX 3090 (Ampere); Flash Attention required.
