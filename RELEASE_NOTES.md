@@ -17,11 +17,25 @@ squeezing more context out of limited VRAM:
 RTX 3090 (Ampere, arch 86). Unzip and run `llama-server.exe` with the flags above —
 no compiling, CUDA runtime DLLs are included.
 
-## Quality (Qwen3 27B, RTX 3090)
+## Benchmarks (Qwen3 27B, RTX 3090)
 
-- Perplexity within ~0.13% of `f16` (`q4_0` is lossless); the penalty does not grow
-  with context.
-- Needle-in-haystack: 10/10 secrets recalled at 256K context, same as `q4_0`.
+**Prefill parity with `q4_0`** — the KV-quant type has no measurable effect on prefill
+(llama-bench, same build, only the KV type differs). The slowdown with context is the usual
+O(n²) attention, identical for every KV type:
+
+| ctx | q3_K | q4_0 |
+| --- | ---: | ---: |
+| 4096 | 938 t/s | 937 t/s |
+| 16384 | 854 | 855 |
+| 65536 | 685 | 686 |
+
+**Long-context retrieval** — needle-in-haystack with 10 secrets placed at depths 5%–95% over a
+259 K-token context: **10/10 recalled, identical to `q4_0`**.
+
+**Perplexity** (wikitext, 16K ctx): `f16`, `q4_0`, and `q3_K` all land within the measurement
+noise (±0.037) on the 27B — no measurable quality loss from the q3_K KV cache. On a small model
+(e.g. 1.5B) a `q3_K`/`q4_0` KV cache degrades badly, so validate on your own model; large models
+are robust.
 
 ## Implementation
 
