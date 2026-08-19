@@ -24,6 +24,12 @@ that fix and adds q3_K on top; the fix itself is not part of what this release c
 > KV-quant sensitivity is mostly a small-model artifact — small models (e.g. 1.5B) can degrade badly
 > under `q3_K`/`q4_0` KV, while a 27B tolerates it. Validate on your own model.
 
+## Acknowledgements
+
+The `q3_K` quantization format itself is [@ikawrakow](https://github.com/ikawrakow)'s k-quant work.
+This release only wires that existing quant into the KV-cache path — it does not add a new
+quantization scheme.
+
 ## Notes
 
 - CUDA backend, tested on RTX 3090 (Ampere); Flash Attention required.
