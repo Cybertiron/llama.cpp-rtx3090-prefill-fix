@@ -457,7 +457,13 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
 
     // For small batch sizes the vector kernel may be preferable over the kernels optimized for large batch sizes:
     // 192 satisfies % 64 == 0 but has no vec instance (DKQ != DV); force it onto the MMA path.
-    const bool can_use_vector_kernel = Q->ne[0] <= 256 && Q->ne[0] % 64 == 0 && Q->ne[0] != 192 && K->ne[1] % FATTN_KQ_STRIDE == 0;
+    // q3_K/q2_K also have no VEC-kernel instance, so keep them off the vector path (they are
+    // dequantized to f16 by the TILE/MMA kernels via need_f16_K/V instead).
+    const bool kv_has_vec_instance =
+        K->type != GGML_TYPE_Q3_K && K->type != GGML_TYPE_Q2_K &&
+        V->type != GGML_TYPE_Q3_K && V->type != GGML_TYPE_Q2_K;
+    const bool can_use_vector_kernel = kv_has_vec_instance &&
+        Q->ne[0] <= 256 && Q->ne[0] % 64 == 0 && Q->ne[0] != 192 && K->ne[1] % FATTN_KQ_STRIDE == 0;
 
     // If Turing tensor cores are available, use them:
     if (turing_mma_available(cc) && Q->ne[0] != 40 && Q->ne[0] != 72) {
