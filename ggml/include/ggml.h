@@ -592,6 +592,12 @@ extern "C" {
 
         GGML_OP_GLU,
 
+        // KVarN KV-cache ops (ported from Anbeeld/beellama.cpp)
+        GGML_OP_KVARN_WHT,
+        GGML_OP_KVARN_STORE,
+        GGML_OP_KVARN_VIEW,
+        GGML_OP_KVARN_MATERIALIZE,
+
         GGML_OP_COUNT,
     };
 
@@ -2438,6 +2444,48 @@ extern "C" {
     GGML_API void ggml_flash_attn_ext_add_sinks(
             struct ggml_tensor * a,
             struct ggml_tensor * sinks);
+
+    // KVarN KV-cache ops (ported from Anbeeld/beellama.cpp). Records span full
+    // 128-token tiles, so these deliberately remain separate from ggml_type.
+    GGML_API struct ggml_tensor * ggml_kvarn_wht(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   head_width);
+
+    GGML_API struct ggml_tensor * ggml_kvarn_store(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * current,
+            struct ggml_tensor  * indices,
+            struct ggml_tensor  * stage,
+            struct ggml_tensor  * records,
+            int                   bits,
+            int                   sinkhorn_iters,
+            bool                  value,
+            int                   stage_groups);
+
+    GGML_API struct ggml_tensor * ggml_kvarn_view(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * records,
+            struct ggml_tensor  * stage_after_store,
+            struct ggml_tensor  * indices,
+            int                   n_kv,
+            int                   stream_start,
+            int                   n_stream,
+            int                   bits,
+            bool                  value,
+            int                   stage_groups);
+
+    GGML_API struct ggml_tensor * ggml_kvarn_materialize(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * records,
+            struct ggml_tensor  * stage_after_store,
+            struct ggml_tensor  * indices,
+            int                   n_kv,
+            int                   stream_start,
+            int                   n_stream,
+            int                   bits,
+            bool                  value,
+            int                   stage_groups);
 
     // TODO: needs to be adapted to ggml_flash_attn_ext
     GGML_API struct ggml_tensor * ggml_flash_attn_back(
