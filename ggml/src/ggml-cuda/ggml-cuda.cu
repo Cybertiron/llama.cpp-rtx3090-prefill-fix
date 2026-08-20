@@ -25,6 +25,8 @@
 #include "ggml-cuda/diagmask.cuh"
 #include "ggml-cuda/diag.cuh"
 #include "ggml-cuda/fattn.cuh"
+#include "ggml-cuda/kvarn.cuh"
+#include "ggml-cuda/kvarn-wht.cuh"
 #include "ggml-cuda/fwht.cuh"
 #include "ggml-cuda/getrows.cuh"
 #include "ggml-cuda/im2col.cuh"
@@ -2389,6 +2391,17 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
         case GGML_OP_SOLVE_TRI:
             ggml_cuda_op_solve_tri(ctx, dst);
             break;
+#if defined(GGML_CUDA_KVARN)
+        case GGML_OP_KVARN_WHT:
+            ggml_cuda_op_kvarn_wht(ctx, dst);
+            break;
+        case GGML_OP_KVARN_STORE:
+            ggml_cuda_op_kvarn_store(ctx, dst);
+            break;
+        case GGML_OP_KVARN_MATERIALIZE:
+            ggml_cuda_op_kvarn_materialize(ctx, dst);
+            break;
+#endif
         case GGML_OP_FILL:
             ggml_cuda_op_fill(ctx, dst);
             break;
@@ -4850,6 +4863,25 @@ static ggml_backend_buffer_type_t ggml_backend_cuda_device_get_host_buffer_type(
     return ggml_backend_cuda_host_buffer_type();
 }
 
+// KVarN op support (ported from Anbeeld/beellama.cpp). Full FA-native capability
+// check comes with the fattn-kvarn kernels (P4); until then the store/materialize
+// path (dequant -> standard attention) is what this gates, so a valid CUDA device
+// with a modern compute capability is sufficient.
+static bool ggml_backend_cuda_kvarn_ops(ggml_backend_dev_t dev) {
+#if !defined(GGML_CUDA_KVARN) || defined(GGML_USE_MUSA)
+    GGML_UNUSED(dev);
+    return false;
+#else
+    if (dev == nullptr || dev->context == nullptr) {
+        return false;
+    }
+    const int device = ((ggml_backend_cuda_device_context *) dev->context)->device;
+    const auto & info = ggml_cuda_info();
+    return device >= 0 && device < info.device_count &&
+        info.devices[device].cc >= GGML_CUDA_CC_TURING;
+#endif
+}
+
 // TODO: move these functions here
 static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const ggml_tensor * op) {
     ggml_backend_cuda_device_context * dev_ctx = (ggml_backend_cuda_device_context *) dev->context;
@@ -5287,6 +5319,14 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
                 op->type == GGML_TYPE_F32;
         case GGML_OP_FLASH_ATTN_EXT:
             return ggml_cuda_flash_attn_ext_supported(dev_ctx->device, op);
+        case GGML_OP_KVARN_WHT:
+        case GGML_OP_KVARN_STORE:
+        case GGML_OP_KVARN_MATERIALIZE:
+#if defined(GGML_CUDA_KVARN)
+            return ggml_backend_cuda_kvarn_ops(dev);
+#else
+            return false;
+#endif
         case GGML_OP_CROSS_ENTROPY_LOSS:
         case GGML_OP_CROSS_ENTROPY_LOSS_BACK:
         case GGML_OP_OPT_STEP_ADAMW:

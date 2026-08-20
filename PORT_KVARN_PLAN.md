@@ -36,8 +36,15 @@ Our fork already carries q3_K/q2_K KV + #27109 fix on these files — must be pr
       reused the batch=1 VEC-abort fix), arg.cpp (kv_cache_types). Full build OK (CPU+CUDA).
       VALIDATED: `-ctk q3_0` and `-ctk q2_0s` load + generate coherently on Gemma 4 E4B
       ("Paris."), no crash. These are plain linear quants (q3_0: d=max/-4; q2_0s: d=max/-2).
-- [ ] **P2 — KVarN ggml ops.** GGML_OP_KVARN_WHT + KVARN_STORE: enum, ggml.c op wiring,
-      CPU impl (ops.cpp), CUDA impl (kvarn.cu + kvarn-wht.cu). Test: op unit via cli.
+- [x] **P2 — KVarN ggml ops. DONE 2026-08-20.** 4 ops (WHT/STORE/VIEW/MATERIALIZE), not 2.
+      P2a (03a2baf): enum GGML_OP_COUNT 101->105, name/symbol arrays, op_params enum, 4 graph
+      constructors (ggml.c/ggml.h). P2b: copied kvarn-wht.cu (233L) + kvarn.cu (2288L) + .cuh
+      verbatim from beellama (self-contained, only include common.cuh; WHT_TYPE/LAUNCH macros
+      defined in-file); added `add_compile_definitions(GGML_CUDA_KVARN)` to ggml-cuda CMake
+      (GLOB auto-includes); dispatch cases + supports_op + includes in ggml-cuda.cu; ported
+      ggml_backend_cuda_kvarn_ops (device_capabilities STUBBED to cc>=Turing until P4 FA).
+      Full build clean (CUDA+CPU+server); f16 sanity gen OK. Not runtime-tested yet (needs P3
+      to wire ops into a graph). CPU compute falls through to default (CUDA-only, fine).
 - [ ] **P3 — llama-kvarn config + KV-cache class.** Port src/llama-kvarn.{cpp,h} +
       llama-kv-cache-kvarn.{cpp,h}; wire cparams.kvarn, llama.h enums, arg.cpp parsing.
 - [ ] **P4 — FA KVarN CUDA kernels.** fattn-kvarn-dispatch/vec + fattn-mma-kvarn-* + the
@@ -46,8 +53,11 @@ Our fork already carries q3_K/q2_K KV + #27109 fix on these files — must be pr
 
 ## Status log
 - 2026-08-20: branch `kvarn-cuda` created off `23ff897`. Architecture mapped. Plan written.
-- 2026-08-20: **P1 DONE** — Q3_0/Q2_0S fallback KV types wired (11 files) + built + validated
-  (`-ctk q3_0`/`q2_0s` generate on Gemma 4 E4B). Next: **P2** — KVarN ggml ops (GGML_OP_KVARN_WHT
-  = Walsh-Hadamard + GGML_OP_KVARN_STORE): enum in ggml.h, op wiring in ggml.c, CPU impl in
-  ggml-cpu/ops.cpp, CUDA impl (port kvarn-wht.cu + kvarn.cu). Reference: beellama ggml.h
-  GGML_OP_KVARN_WHT/STORE + ggml/src/ggml-cuda/kvarn-wht.{cu,cuh}, kvarn.{cu,cuh}.
+- 2026-08-20: **P1 DONE** — Q3_0/Q2_0S fallback KV types wired (11 files) + built + validated.
+- 2026-08-20: **P2 DONE** — 4 KVarN ggml ops (WHT/STORE/VIEW/MATERIALIZE) scaffolded + CUDA
+  impls (kvarn.cu/wht.cu) copied verbatim, compile+link clean. Next: **P3** — port
+  src/llama-kvarn.{cpp,h} + src/llama-kv-cache-kvarn.{cpp,h}; wire cparams.kvarn, llama.h enums
+  (llama_kvarn_type/config), arg.cpp `kvarn2/kvarn3` parsing, and the KV-cache graph build that
+  calls ggml_kvarn_store/view/materialize. This makes the ops runtime-reachable and testable
+  end-to-end (materialize path -> standard FA; native FA kvarn kernels are P4). Watch: base
+  divergence in llama-kv-cache.cpp/llama-graph.cpp (our fork already carries q3_K/q2_K there).
