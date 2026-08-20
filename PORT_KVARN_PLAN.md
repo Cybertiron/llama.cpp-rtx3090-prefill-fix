@@ -53,7 +53,19 @@ Our fork already carries q3_K/q2_K KV + #27109 fix on these files — must be pr
       - [x] **P3a DONE (3805149):** config layer — llama.h enum llama_kvarn_type + llama_kvarn_params
             + API, ggml.h enum ggml_flash_attn_ext_kvarn_domain, llama-kvarn.cpp/h (descriptors,
             tile layout, attention planning) verbatim. llama.dll builds clean.
-      - [ ] **P3b (NEXT, hard, novel code):** allocate KVarN cache tensors (records i8 + stage f16)
+      - [!] **P3b FINDING (2026-08-20):** beellama's llama_kv_cache_kvarn is deeply coupled to
+            beellama's *extended* KV-cache interfaces. Its context overrides **56** methods absent
+            from our llama_kv_cache_context (all tail-*: get_tail_*, cpy_*_tail, build_input_tail_*,
+            get_tail_route/storage_kind + new types llama_kv_tail_route/storage_kind/layer_route),
+            plus ~20 on llama_memory_i. So "interface extension" (user chose A) is really ~76 methods
+            + several new types = effectively the faithful port. Our base DOES have the core the
+            minimal path needs (get_k/get_v/cpy_k/cpy_v/get_n_kv/type_k/type_v/build_input_k_idxs/
+            v_idxs). Real minimal = STRIP the ported cache's tail overrides to fit our existing
+            interface (get_k->materialize, cpy_k->store), dropping the 128-token exact-tail
+            optimization (quality nicety, not correctness). That is delicate surgery on 2951 lines.
+            Cache files stashed in _kvarn_p3b_pending/. AWAITING user decision: strip-surgery
+            (large, uncertain) vs pause and bank P1/P2/P3a.
+      - [ ] **P3b (was): allocate KVarN cache tensors (records i8 + stage f16)
             and wire the graph — on write call ggml_kvarn_store; on read call ggml_kvarn_materialize
             -> f16 K/V -> standard ggml_flash_attn_ext. arg.cpp: parse `kvarn2`/`kvarn3` -> set the
             llama_kvarn_type config. This is the riskiest part (new integration glue, not a port).
