@@ -9,11 +9,19 @@ It carries two independent changes on top of upstream:
 1. **Prefill fix for quantized KV cache + Flash Attention** (upstream issue
    [#27109](https://github.com/ggml-org/llama.cpp/issues/27109)) — restores full prompt-processing
    speed when a quantized KV cache is combined with Flash Attention.
-2. **`q3_K` as a KV cache type** (new) — a 3.44-bit KV cache option that saves ~24 % VRAM versus
-   `q4_0` while staying lossless on large models, at full prefill speed.
+2. **New K-quant KV cache types** (new):
+   - **`q3_K`** (3.44-bit) — saves ~24 % VRAM versus `q4_0`, essentially lossless on large models,
+     at full prefill speed. **Recommended** as the practical lower bound.
+   - **`q2_K`** (2.6-bit, *experimental*) — squeezes another ~24 % below `q3_K` for the tightest KV
+     budgets, but at a real, measurable quality cost. For extreme-VRAM cases only.
 
 Everything else is stock upstream llama.cpp. The original project README is preserved as
 [`README.upstream.md`](README.upstream.md) — use it for general build and usage instructions.
+
+> **2026-08-20 update.** Fixed a Flash-Attention kernel-routing bug that aborted `q3_K`/`q2_K` on a
+> plain single-token (batch = 1) decode on Ampere — they had no VEC-kernel instance and hit a fatal
+> abort. They now fall through to the TILE/MMA f16 path for every batch size. Prefill and
+> speculative/MTP decode were unaffected. Re-download the binary if you grabbed an earlier build.
 
 ---
 
@@ -39,7 +47,7 @@ llama-server -m model.gguf --flash-attn on \
 
 ---
 
-## 2. New KV cache type: `q3_K`
+## 2. New KV cache types: `q3_K` and `q2_K`
 
 Adds `q3_K` (a K-quant super-block format, **3.4375 bits/weight**) as a selectable KV cache type:
 
@@ -92,6 +100,48 @@ Prefill throughput (`llama-bench -p 4096 -n 0`, Qwen 27B, RTX 3090, `--flash-att
 `q3_K` stores the KV cache at 3.44 bit vs `q4_0` at 4.5 bit — about **24 % less KV-cache VRAM**, which
 matters most at long context lengths.
 
+### `q2_K` — experimental, extreme VRAM only
+
+`q2_K` (**2.625 bits/weight**) is wired in through the same machinery, for when you need the last bit
+of KV VRAM:
+
+```bash
+llama-server -m model.gguf --flash-attn on \
+             --cache-type-k q2_K --cache-type-v q2_K
+```
+
+It is **more experimental than `q3_K`** and carries a *real* quality cost — unlike `q3_K`, the drop is
+measurable, not within noise. On Qwen 27B (16 K perplexity, wikitext): `f16` 5.799, `q3_K` 5.791
+(≈ `f16`), `q2_K` 5.937 (**+2.4 %**, ~4σ). It needs an internal f16-range clamp on the super-block
+scale to stay finite (`q2_K`'s `d = max_scale/15` has less headroom than `q3_K`'s `/32`, so large KV
+values would otherwise overflow the f16 store and produce NaNs). Reach for `q2_K` only when `q3_K` will
+not fit and you can accept the degradation; otherwise treat **`q3_K` as the recommended floor**.
+
+### KV cache type comparison
+
+All bit-widths are exact (KV-cache storage per element). VRAM is the KV-cache footprint relative to
+`f16`. Quality was measured directly on Qwen3 27B for the **bold** rows; the legacy rows follow from
+bit-width (higher bits than `q4_0`, which measured lossless on this model).
+
+| KV type | Bits/elem | KV VRAM vs `f16` | Quality (Qwen3 27B) | Status |
+| ------- | --------: | ---------------: | ------------------- | ------ |
+| `f16`   | 16.0      | 100 %            | reference           | baseline |
+| `q8_0`  | 8.5       | 53 %             | lossless            | safe on any model, incl. small |
+| `q5_1`  | 6.0       | 38 %             | lossless (large)    | |
+| `q5_0`  | 5.5       | 34 %             | lossless (large)    | |
+| `q4_1`  | 5.0       | 31 %             | lossless (large)    | |
+| `q4_0`  | 4.5       | 28 %             | **lossless**        | common default |
+| **`q3_K`** | 3.4375 | 21.5 %           | **≈ lossless (+~0.1 %)** | **recommended floor** |
+| **`q2_K`** | 2.625  | 16.4 %           | **+2.4 % ppl**      | experimental, extreme VRAM |
+| KVarN-3 †  | ~3.0   | ~19 %            | ~2.5× better KLD/bit than `q3_K` | external fork; not included here |
+
+> † **KVarN** is a variance-aware KV quantization from the separate
+> [Anbeeld/beellama.cpp](https://github.com/Anbeeld/beellama.cpp) fork — **not** part of this build.
+> In a KL-divergence comparison its 3-bit variant landed ~2.5× closer to `f16` per bit than `q3_K`,
+> so it is the more interesting research direction for quality-per-bit. The catch for this fork's use
+> case: on the Qwen3-Next hybrid its large recurrent-state cache forces the model across **two GPUs**,
+> which defeats the "fit a big context on one 24 GB card" goal — hence `q3_K`/`q2_K` here instead.
+
 ### Requirements & limitations
 
 - CUDA build with Flash Attention. Tested on RTX 3090 (Ampere).
@@ -110,12 +160,13 @@ cmake -B build -DGGML_CUDA=ON
 cmake --build build --config Release -j
 ```
 
-The `q3_K` KV type lives on the experimental `q3k-kv-experimental` branch (this release); the
+The `q3_K` / `q2_K` KV types live on the experimental `q3k-kv-experimental` branch (this release); the
 standalone `#27109` prefill fix lives on `fix-27109-quant-kv-fp16` and is submitted upstream as
-PR [#27140](https://github.com/ggml-org/llama.cpp/pull/27140). The `q3_K` KV type touches the CUDA
+PR [#27140](https://github.com/ggml-org/llama.cpp/pull/27140). Each K-quant KV type touches the CUDA
 KV-cache paths (cache-type parsing, the SET_ROWS quantized write, the Flash-Attention support gate and
-f16 conversion, and the non-contiguous q3_K→f16 dequant for the KV view), plus `llama-bench` so it
-accepts `-ctk q3_K` / `-ctv q3_K`.
+f16 conversion, and the non-contiguous K-quant→f16 dequant for the KV view), plus `llama-bench` so it
+accepts `-ctk q3_K`/`q2_K` and `-ctv q3_K`/`q2_K`. `q3_K` alone is also submitted upstream as a
+standalone PR [#27362](https://github.com/ggml-org/llama.cpp/pull/27362).
 
 ## License
 

@@ -23,6 +23,29 @@ squeezing more context out of limited VRAM:
 RTX 3090 (Ampere, arch 86). Unzip and run `llama-server.exe` with the flags above —
 no compiling, CUDA runtime DLLs are included.
 
+## KV cache type comparison
+
+Bit-widths are exact (KV storage per element); VRAM is the KV footprint vs `f16`. Quality was
+measured directly on Qwen3 27B for the **bold** rows; legacy rows follow from bit-width.
+
+| KV type | Bits/elem | KV VRAM vs `f16` | Quality (Qwen3 27B) | Status |
+| ------- | --------: | ---------------: | ------------------- | ------ |
+| `f16`   | 16.0      | 100 %            | reference           | baseline |
+| `q8_0`  | 8.5       | 53 %             | lossless            | safe on any model |
+| `q5_1`  | 6.0       | 38 %             | lossless (large)    | |
+| `q5_0`  | 5.5       | 34 %             | lossless (large)    | |
+| `q4_1`  | 5.0       | 31 %             | lossless (large)    | |
+| `q4_0`  | 4.5       | 28 %             | **lossless**        | common default |
+| **`q3_K`** | 3.4375 | 21.5 %           | **≈ lossless (+~0.1 %)** | **recommended floor** |
+| **`q2_K`** | 2.625  | 16.4 %           | **+2.4 % ppl**      | experimental, extreme VRAM |
+| KVarN-3 † | ~3.0    | ~19 %            | ~2.5× better KLD/bit than `q3_K` | external fork, not included |
+
+> † **KVarN** (variance-aware KV quant from the separate
+> [Anbeeld/beellama.cpp](https://github.com/Anbeeld/beellama.cpp) fork, **not** in this build) landed
+> ~2.5× closer to `f16` per bit than `q3_K` in a KL-divergence test — the more interesting
+> quality-per-bit direction. Its catch on the Qwen3-Next hybrid: the large recurrent-state cache
+> forces two GPUs, defeating the single-24 GB-card goal, so this fork ships `q3_K`/`q2_K` instead.
+
 ## Benchmarks (Qwen3 27B, RTX 3090)
 
 **Prefill parity with `q4_0`** — the KV-quant type has no measurable effect on prefill
