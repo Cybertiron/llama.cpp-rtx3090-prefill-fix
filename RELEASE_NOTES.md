@@ -49,6 +49,20 @@ measured directly on that model for the **bold** rows; legacy rows follow from b
 > quality-per-bit direction. Its catch on the Qwen3-Next hybrid: the large recurrent-state cache
 > forces two GPUs, defeating the single-24 GB-card goal, so this fork ships `q3_K`/`q2_K` instead.
 
+## Tested across models
+
+So the KV types are not tuned to a single model, they were exercised on more than one architecture
+(one RTX 3090, Flash Attention on, plain batch = 1 decode — no speculative/MTP):
+
+| Model | KV type | Context | Result |
+| ----- | ------- | ------- | ------ |
+| Qwen3.6-27B (`UD-Q4_K_XL`) | `q3_K`/`q3_K` | 262144 (256K, max) | needle **10/10**, depths 5–95 %, no crash |
+| Qwen3.8-27B (`UD-Q4_K_XL`) | `q2_K`/`q2_K` | 262144 (256K, max) | needle **10/10**, depths 5–95 %, no crash |
+| Gemma-3n E4B (`Q8_0`, head_dim 512) | `q2_K` and `f16` | 32768 | both coherent; `q2_K` slightly looser (small-model KV sensitivity) |
+
+Even the aggressive `q2_K` holds full long-context retrieval on a 27B at the model's max 256K context,
+and the paths work across different head dimensions (Qwen key_length 256, Gemma 512).
+
 ## Benchmarks (Qwen3.6-27B `UD-Q4_K_XL`, RTX 3090)
 
 **Prefill parity with `q4_0`** — the KV-quant type has no measurable effect on prefill

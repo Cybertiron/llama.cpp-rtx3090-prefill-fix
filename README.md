@@ -147,6 +147,22 @@ bit-width (higher bits than `q4_0`, which measured lossless on this model).
 > case: on the Qwen3-Next hybrid its large recurrent-state cache forces the model across **two GPUs**,
 > which defeats the "fit a big context on one 24 GB card" goal — hence `q3_K`/`q2_K` here instead.
 
+### Tested across models
+
+To confirm the KV types are not tuned to a single model, they were exercised on more than one
+architecture (all on one RTX 3090, Flash Attention on, plain batch = 1 decode — no speculative/MTP):
+
+| Model | KV type | Context | Result |
+| ----- | ------- | ------- | ------ |
+| **Qwen3.6-27B** (`UD-Q4_K_XL`, Qwen3-Next) | `q3_K`/`q3_K` | 262144 (256K, max) | needle-in-haystack **10/10** across depths 5–95 %, no crash |
+| **Qwen3.8-27B** (`UD-Q4_K_XL`, Qwen3-Next) | `q2_K`/`q2_K` | 262144 (256K, max) | needle-in-haystack **10/10** across depths 5–95 %, no crash |
+| **Gemma-3n E4B** (`Q8_0`, head_dim 512) | `q2_K` and `f16` | 32768 | both generate coherently; `q2_K` a touch looser (small-model KV sensitivity) |
+
+So the aggressive `q2_K` KV holds full long-context retrieval on a 27B model at the model's maximum
+256K context, and the code paths work across different head dimensions (Qwen key_length 256,
+Gemma 512). Small models are more KV-quant sensitive, so a slight quality loosening on Gemma's `q2_K`
+is expected and not a defect.
+
 ### Requirements & limitations
 
 - CUDA build with Flash Attention. Tested on RTX 3090 (Ampere).
