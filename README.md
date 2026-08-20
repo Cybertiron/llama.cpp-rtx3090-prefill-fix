@@ -67,7 +67,12 @@ the K cache is a coincidence.)
 
 ### Quality — lossless on large models
 
-Perplexity on Qwen 27B (`--flash-attn on`, V = `f16` unless noted). Differences are within the
+> **Test model.** All quality, speed, VRAM and needle numbers in this document were measured on
+> **Qwen3.6-27B** (Unsloth `Qwen3.6-27B-UD-Q4_K_XL.gguf`, a Qwen3-Next hybrid, `context_length` 262144)
+> on a single RTX 3090. The `q2_K` perplexity figures below use the same model. Small models are far
+> more KV-quant sensitive — see the note under the table.
+
+Perplexity on Qwen3.6-27B (`--flash-attn on`, V = `f16` unless noted). Differences are within the
 measurement noise (±0.003):
 
 | KV cache (K / V) | Bits (K) | Perplexity |

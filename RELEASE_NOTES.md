@@ -25,8 +25,11 @@ no compiling, CUDA runtime DLLs are included.
 
 ## KV cache type comparison
 
+All numbers here were measured on **Qwen3.6-27B** (Unsloth `Qwen3.6-27B-UD-Q4_K_XL.gguf`, a Qwen3-Next
+hybrid, `context_length` 262144) on a single RTX 3090.
+
 Bit-widths are exact (KV storage per element); VRAM is the KV footprint vs `f16`. Quality was
-measured directly on Qwen3 27B for the **bold** rows; legacy rows follow from bit-width.
+measured directly on that model for the **bold** rows; legacy rows follow from bit-width.
 
 | KV type | Bits/elem | KV VRAM vs `f16` | Quality (Qwen3 27B) | Status |
 | ------- | --------: | ---------------: | ------------------- | ------ |
@@ -46,7 +49,7 @@ measured directly on Qwen3 27B for the **bold** rows; legacy rows follow from bi
 > quality-per-bit direction. Its catch on the Qwen3-Next hybrid: the large recurrent-state cache
 > forces two GPUs, defeating the single-24 GB-card goal, so this fork ships `q3_K`/`q2_K` instead.
 
-## Benchmarks (Qwen3 27B, RTX 3090)
+## Benchmarks (Qwen3.6-27B `UD-Q4_K_XL`, RTX 3090)
 
 **Prefill parity with `q4_0`** — the KV-quant type has no measurable effect on prefill
 (llama-bench, same build, only the KV type differs). The slowdown with context is the usual
