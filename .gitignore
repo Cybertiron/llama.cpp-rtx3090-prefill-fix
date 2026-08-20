@@ -153,3 +153,10 @@ a.out.*
 
 AGENTS.local.md
 .pi/SYSTEM.md
+*.json
+*.diff
+dll_before.txt
+release_url.txt
+*.patch.md
+PR-27109.md
+my-pr-body.md
