@@ -160,11 +160,11 @@ architecture (all on one RTX 3090, Flash Attention on, plain batch = 1 decode �
 | ----- | ------- | ------- | ------ |
 | **Qwen3.6-27B** (`UD-Q4_K_XL`, Qwen3-Next) | `q3_K`/`q3_K` | 262144 (256K, max) | needle-in-haystack **10/10** across depths 5–95 %, no crash |
 | **Qwen3.8-27B** (`UD-Q4_K_XL`, Qwen3-Next) | `q2_K`/`q2_K` | 262144 (256K, max) | needle-in-haystack **10/10** across depths 5–95 %, no crash |
-| **Gemma-3n E4B** (`Q8_0`, head_dim 512) | `q3_K`/`q3_K` | 262144 (256K, YaRN 2× over 128K native) | needle-in-haystack **10/10** across depths 5–95 % |
-| **Gemma-3n E4B** (`Q8_0`, head_dim 512) | `q2_K`/`q2_K` | 262144 (256K, YaRN 2×) | needle-in-haystack **10/10** across depths 5–95 % |
+| **Gemma 4 E4B** (`Q8_0`, head_dim 512) | `q3_K`/`q3_K` | 262144 (256K, YaRN 2× over 128K native) | needle-in-haystack **10/10** across depths 5–95 % |
+| **Gemma 4 E4B** (`Q8_0`, head_dim 512) | `q2_K`/`q2_K` | 262144 (256K, YaRN 2×) | needle-in-haystack **10/10** across depths 5–95 % |
 
 So both K-quant KV types hold full 256K-context retrieval on two different 27B models *and* on the
-much smaller Gemma-3n E4B (sliding-window attention, head_dim 512, stretched to 256K with YaRN) — even
+much smaller Gemma 4 E4B (sliding-window attention, head_dim 512, stretched to 256K with YaRN) — even
 the aggressive `q2_K`. The code paths work across different head dimensions (Qwen key_length 256,
 Gemma 512). Small models are more KV-quant sensitive in general free-form generation (Gemma's `q2_K`
 output reads a touch looser than `f16`), but that did not cost any needle retrieval here.

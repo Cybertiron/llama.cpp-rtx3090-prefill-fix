@@ -61,11 +61,11 @@ So the KV types are not tuned to a single model, they were exercised on more tha
 | ----- | ------- | ------- | ------ |
 | Qwen3.6-27B (`UD-Q4_K_XL`) | `q3_K`/`q3_K` | 262144 (256K, max) | needle **10/10**, depths 5–95 %, no crash |
 | Qwen3.8-27B (`UD-Q4_K_XL`) | `q2_K`/`q2_K` | 262144 (256K, max) | needle **10/10**, depths 5–95 %, no crash |
-| Gemma-3n E4B (`Q8_0`, head_dim 512) | `q3_K`/`q3_K` | 262144 (256K, YaRN 2×) | needle **10/10**, depths 5–95 % |
-| Gemma-3n E4B (`Q8_0`, head_dim 512) | `q2_K`/`q2_K` | 262144 (256K, YaRN 2×) | needle **10/10**, depths 5–95 % |
+| Gemma 4 E4B (`Q8_0`, head_dim 512) | `q3_K`/`q3_K` | 262144 (256K, YaRN 2×) | needle **10/10**, depths 5–95 % |
+| Gemma 4 E4B (`Q8_0`, head_dim 512) | `q2_K`/`q2_K` | 262144 (256K, YaRN 2×) | needle **10/10**, depths 5–95 % |
 
 Both K-quant KV types hold full 256K-context retrieval on two 27B models and on the much smaller
-Gemma-3n E4B (sliding-window attention, stretched to 256K with YaRN) — even the aggressive `q2_K`. The
+Gemma 4 E4B (sliding-window attention, stretched to 256K with YaRN) — even the aggressive `q2_K`. The
 paths work across different head dimensions (Qwen key_length 256, Gemma 512).
 
 ## Benchmarks (Qwen3.6-27B `UD-Q4_K_XL`, RTX 3090)
