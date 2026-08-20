@@ -162,6 +162,15 @@ architecture (all on one RTX 3090, Flash Attention on, plain batch = 1 decode �
 | **Qwen3.8-27B** (`UD-Q4_K_XL`, Qwen3-Next) | `q2_K`/`q2_K` | 262144 (256K, max) | needle-in-haystack **10/10** across depths 5–95 %, no crash |
 | **Gemma 4 E4B** (`Q8_0`, head_dim 512) | `q3_K`/`q3_K` | 262144 (256K, YaRN 2× over 128K native) | needle-in-haystack **10/10** across depths 5–95 % |
 | **Gemma 4 E4B** (`Q8_0`, head_dim 512) | `q2_K`/`q2_K` | 262144 (256K, YaRN 2×) | needle-in-haystack **10/10** across depths 5–95 % |
+| Qwen3.6-27B (`UD-Q4_K_XL`) | `kvarn3` ‡ | 262144 (256K, max) | needle **10/10** — for reference, external fork |
+| Qwen3.6-27B (`UD-Q4_K_XL`) | `kvarn2` ‡ | 262144 (256K, max) | needle **10/10** — for reference, external fork |
+
+‡ The two `kvarn*` rows are **not** this build — they were run for reference on the external
+[Anbeeld/beellama.cpp](https://github.com/Anbeeld/beellama.cpp) release (v0.4.3), which is the only build
+that has KVarN. On the Qwen3-Next hybrid KVarN needs **two RTX 3090s** (its recurrent-state cache does
+not fit one 24 GB card), and it keeps an intrinsic 128-token exact suffix. So even at the 2.375-bit
+`kvarn2` level, retrieval is intact — but it costs a second GPU, which is exactly why this fork ships
+the single-card `q3_K`/`q2_K` instead.
 
 So both K-quant KV types hold full 256K-context retrieval on two different 27B models *and* on the
 much smaller Gemma 4 E4B (sliding-window attention, head_dim 512, stretched to 256K with YaRN) — even
