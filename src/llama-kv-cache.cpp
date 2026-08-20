@@ -160,6 +160,17 @@ llama_kv_cache::llama_kv_cache(
 
     const bool is_mla = hparams.is_mla();
 
+    // precision tail (experimental): keep the last N written K/V tokens as an exact f16
+    // ring buffer that overrides the quantized body at attention time. Enabled via env
+    // LLAMA_KV_TAIL=<N>. 0 = disabled (normal behaviour).
+    {
+        const char * s = getenv("LLAMA_KV_TAIL");
+        n_tail = s ? (uint32_t) std::max(0, atoi(s)) : 0;
+        if (n_tail > 0) {
+            LLAMA_LOG_INFO("%s: precision tail enabled: n_tail = %u exact f16 tokens per layer\n", __func__, n_tail);
+        }
+    }
+
     for (uint32_t il = 0; il < n_layer; il++) {
         if (!hparams.has_kv(il)) {
             LLAMA_LOG_DEBUG("%s: layer %3d: does not have KV cache\n", __func__, il);
@@ -234,6 +245,16 @@ llama_kv_cache::llama_kv_cache(
         has_k && ggml_format_name(k, "cache_k_l%d", il);
         has_v && ggml_format_name(v, "cache_v_l%d", il);
 
+        // precision tail: small exact f16 ring of the last n_tail K/V vectors
+        ggml_tensor * k_tail = nullptr;
+        ggml_tensor * v_tail = nullptr;
+        if (n_tail > 0) {
+            k_tail = has_k ? ggml_new_tensor_3d(ctx, GGML_TYPE_F16, n_embd_k_gqa, n_tail, n_stream) : nullptr;
+            v_tail = has_v ? ggml_new_tensor_3d(ctx, GGML_TYPE_F16, n_embd_v_gqa, n_tail, n_stream) : nullptr;
+            has_k && ggml_format_name(k_tail, "cache_k_tail_l%d", il);
+            has_v && ggml_format_name(v_tail, "cache_v_tail_l%d", il);
+        }
+
         std::vector<ggml_tensor *> k_stream;
         std::vector<ggml_tensor *> v_stream;
 
@@ -244,7 +265,7 @@ llama_kv_cache::llama_kv_cache(
 
         map_layer_ids[il] = layers.size();
 
-        layers.push_back({ il, k, v, k_stream, v_stream, });
+        layers.push_back({ il, k, v, k_stream, v_stream, k_tail, v_tail, });
     }
 
     if (reuse) {

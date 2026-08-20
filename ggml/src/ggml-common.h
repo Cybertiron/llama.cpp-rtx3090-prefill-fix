@@ -99,6 +99,13 @@ typedef sycl::half2 ggml_half2;
 #define QI2_0 (QK2_0 / 32)
 #define QR2_0 1
 
+// KVarN fallback storage types (ported from Anbeeld/beellama.cpp)
+#define QI3_0 (QK3_0 / (4 * QR3_0))
+#define QR3_0 2
+
+#define QI2_0S (QK2_0S / (4 * QR2_0S))
+#define QR2_0S 2
+
 
 #define QI4_0 (QK4_0 / (4 * QR4_0))
 #define QR4_0 2
@@ -190,6 +197,24 @@ typedef struct {
     uint8_t qs[QK2_0 / 4];   // 2 bits per element
 } block_q2_0;
 static_assert(sizeof(block_q2_0) == sizeof(ggml_half) + QK2_0 / 4, "wrong q2_0 block size/padding");
+
+// KVarN fallback storage types (ported from Anbeeld/beellama.cpp)
+// q3_0: 3-bit signed; 2-bit planes in qs (byte j holds elems j,j+8,j+16,j+24), 3rd bit per elem in qh
+#define QK3_0 32
+typedef struct {
+    ggml_half d;             // delta
+    uint8_t   qh[QK3_0 / 8]; // upper bit of quants
+    uint8_t   qs[QK3_0 / 4]; // lower two bits of quants
+} block_q3_0;
+static_assert(sizeof(block_q3_0) == sizeof(ggml_half) + QK3_0 / 8 + QK3_0 / 4, "wrong q3_0 block size/padding");
+
+// q2_0s: 2-bit signed
+#define QK2_0S 32
+typedef struct {
+    ggml_half d;              // delta
+    uint8_t   qs[QK2_0S / 4]; // quants, two bits each
+} block_q2_0s;
+static_assert(sizeof(block_q2_0s) == sizeof(ggml_half) + QK2_0S / 4, "wrong q2_0s block size/padding");
 
 #define QK4_0 32
 typedef struct {

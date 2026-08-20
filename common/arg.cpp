@@ -314,6 +314,8 @@ const std::vector<ggml_type> kv_cache_types = {
     GGML_TYPE_Q5_1,
     GGML_TYPE_Q3_K,   // q3 KV cache (K-quant super-block, ~3.4 bpw) - saves VRAM
     GGML_TYPE_Q2_K,   // q2 KV cache (K-quant super-block, ~2.6 bpw) - max VRAM saving, lowest quality
+    GGML_TYPE_Q3_0,   // KVarN fallback storage (kvarn3) - ported from Anbeeld/beellama.cpp
+    GGML_TYPE_Q2_0S,  // KVarN fallback storage (kvarn2) - ported from Anbeeld/beellama.cpp
 };
 
 static ggml_type kv_cache_type_from_str(const std::string & s) {

@@ -233,9 +233,19 @@ private:
 
         std::vector<ggml_tensor *> k_stream;
         std::vector<ggml_tensor *> v_stream;
+
+        // precision tail (experimental, env LLAMA_KV_TAIL): exact f16 copy of the last
+        // n_tail written K/V vectors (ring buffer). Overrides the quantized body for the
+        // recent tokens at attention time - keeps the recent working set exact so low-bit
+        // KV (q2_K/q3_K) stays stable/accurate at long context. nullptr when disabled.
+        ggml_tensor * k_tail = nullptr;
+        ggml_tensor * v_tail = nullptr;
     };
 
     bool v_trans = true;  // the value tensor is transposed
+
+    // precision tail size (exact recent K/V tokens); 0 = disabled. Set via env LLAMA_KV_TAIL.
+    uint32_t n_tail = 0;
 
     const uint32_t n_seq_max = 1;
     const uint32_t n_stream  = 1;

@@ -43,6 +43,48 @@ static __device__ void quantize_f32_q4_0_block(const float * __restrict__ x, blo
     }
 }
 
+// ---- KVarN fallback storage KV write (ported from Anbeeld/beellama.cpp quantize_row_q3_0_ref/q2_0s_ref) ----
+static __device__ void quantize_f32_q3_0_block(const float * __restrict__ x, block_q3_0 * __restrict__ y) {
+    float amax = 0.0f;
+    float vmax = 0.0f;
+    for (int j = 0; j < QK3_0; ++j) {
+        const float v = x[j];
+        if (amax < fabsf(v)) { amax = fabsf(v); vmax = v; }
+    }
+    const float d  = vmax / -4;
+    const float id = d ? 1.0f/d : 0.0f;
+    y->d = d;
+
+    uint32_t qh = 0;
+    for (int j = 0; j < QK3_0/4; ++j) { y->qs[j] = 0; }
+    for (int j = 0; j < QK3_0; ++j) {
+        const float x0 = x[j]*id;
+        const uint8_t xi0 = min(7, (int8_t)(x0 + 4.5f));
+        y->qs[j % (QK3_0/4)] |= (xi0 & 0x03) << (2*(j / (QK3_0/4)));
+        qh |= ((xi0 & 0x04u) >> 2) << j;
+    }
+    memcpy(&y->qh, &qh, sizeof(qh));
+}
+
+static __device__ void quantize_f32_q2_0s_block(const float * __restrict__ x, block_q2_0s * __restrict__ y) {
+    float amax = 0.0f;
+    float vmax = 0.0f;
+    for (int j = 0; j < QK2_0S; ++j) {
+        const float v = x[j];
+        if (amax < fabsf(v)) { amax = fabsf(v); vmax = v; }
+    }
+    const float d  = vmax / -2;
+    const float id = d ? 1.0f/d : 0.0f;
+    y->d = d;
+
+    for (int j = 0; j < QK2_0S/4; ++j) { y->qs[j] = 0; }
+    for (int j = 0; j < QK2_0S; ++j) {
+        const float x0 = x[j]*id;
+        const uint8_t xi0 = min(3, (int8_t)(x0 + 2.5f));
+        y->qs[j % (QK2_0S/4)] |= (xi0 & 0x03) << (2*(j / (QK2_0S/4)));
+    }
+}
+
 // ---- q3_K KV cache write: quantize one 256-element super-block (verbatim port of quantize_row_q3_K_ref) ----
 static __device__ __forceinline__ int q3k_nearest_int(float fval) {
     fval = fval + 12582912.0f;

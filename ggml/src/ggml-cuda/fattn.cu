@@ -350,6 +350,8 @@ static bool ggml_cuda_fattn_kv_type_supported(ggml_type type) {
         case GGML_TYPE_Q8_0:
         case GGML_TYPE_Q3_K:   // q3 KV: dequantized via the f16 path (need_f16_K)
         case GGML_TYPE_Q2_K:   // q2 KV: same f16 dequant path
+        case GGML_TYPE_Q3_0:   // KVarN fallback storage: same f16 dequant path
+        case GGML_TYPE_Q2_0S:  // KVarN fallback storage: same f16 dequant path
         case GGML_TYPE_BF16:
             return true;
         default:
@@ -461,7 +463,9 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
     // dequantized to f16 by the TILE/MMA kernels via need_f16_K/V instead).
     const bool kv_has_vec_instance =
         K->type != GGML_TYPE_Q3_K && K->type != GGML_TYPE_Q2_K &&
-        V->type != GGML_TYPE_Q3_K && V->type != GGML_TYPE_Q2_K;
+        V->type != GGML_TYPE_Q3_K && V->type != GGML_TYPE_Q2_K &&
+        K->type != GGML_TYPE_Q3_0 && K->type != GGML_TYPE_Q2_0S &&
+        V->type != GGML_TYPE_Q3_0 && V->type != GGML_TYPE_Q2_0S;
     const bool can_use_vector_kernel = kv_has_vec_instance &&
         Q->ne[0] <= 256 && Q->ne[0] % 64 == 0 && Q->ne[0] != 192 && K->ne[1] % FATTN_KQ_STRIDE == 0;
 
@@ -563,8 +567,10 @@ size_t ggml_cuda_flash_attn_ext_get_alloc_size(int device, const ggml_tensor * d
             break;
         case BEST_FATTN_KERNEL_VEC:
             // q3_K/q2_K have no VEC-kernel dequant, so force the f16 conversion (like F32)
-            need_f16_K = K->type == GGML_TYPE_F32 || K->type == GGML_TYPE_Q3_K || K->type == GGML_TYPE_Q2_K;
-            need_f16_V = V->type == GGML_TYPE_F32 || V->type == GGML_TYPE_Q3_K || V->type == GGML_TYPE_Q2_K;
+            need_f16_K = K->type == GGML_TYPE_F32 || K->type == GGML_TYPE_Q3_K || K->type == GGML_TYPE_Q2_K ||
+                         K->type == GGML_TYPE_Q3_0 || K->type == GGML_TYPE_Q2_0S;
+            need_f16_V = V->type == GGML_TYPE_F32 || V->type == GGML_TYPE_Q3_K || V->type == GGML_TYPE_Q2_K ||
+                         V->type == GGML_TYPE_Q3_0 || V->type == GGML_TYPE_Q2_0S;
             break;
         case BEST_FATTN_KERNEL_NONE:
             break;

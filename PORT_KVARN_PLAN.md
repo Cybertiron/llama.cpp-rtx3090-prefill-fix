@@ -28,10 +28,14 @@ llama-kv-cache.cpp, ggml-cpu/ops.cpp) must be re-merged by hand, not cherry-pick
 Our fork already carries q3_K/q2_K KV + #27109 fix on these files — must be preserved.
 
 ## Phased roadmap (each phase must build before moving on)
-- [ ] **P1 — fallback quant types.** Add GGML_TYPE_Q3_0 + Q2_0S (min for kvarn3/kvarn2):
-      ggml.h enum, ggml-common.h block structs, ggml.c type_traits, ggml-quants.c ref
-      quant/dequant, ggml-cpu quants, ggml-cuda dequant + convert + set-rows + fattn gate.
-      Reuse the q3_K/q2_K KV-wiring pattern already in this fork. Test: `-ctk q3_0` loads.
+- [x] **P1 — fallback quant types. DONE 2026-08-20.** Added GGML_TYPE_Q3_0 (43) + Q2_0S (44),
+      COUNT=45. Files: ggml.h enum, ggml-common.h (QK/QR + block structs), ggml.c traits,
+      ggml-quants.c/.h ref quant/dequant, ggml-cuda dequantize.cuh (device dequant), convert.cu
+      (6 dispatchers), cpy-utils.cuh (quantize block), set-rows.cu (dispatch), ggml-cuda.cu
+      (SET_ROWS gate), fattn.cu (kv_type_supported + need_f16 + kv_has_vec_instance exclusion —
+      reused the batch=1 VEC-abort fix), arg.cpp (kv_cache_types). Full build OK (CPU+CUDA).
+      VALIDATED: `-ctk q3_0` and `-ctk q2_0s` load + generate coherently on Gemma 4 E4B
+      ("Paris."), no crash. These are plain linear quants (q3_0: d=max/-4; q2_0s: d=max/-2).
 - [ ] **P2 — KVarN ggml ops.** GGML_OP_KVARN_WHT + KVARN_STORE: enum, ggml.c op wiring,
       CPU impl (ops.cpp), CUDA impl (kvarn.cu + kvarn-wht.cu). Test: op unit via cli.
 - [ ] **P3 — llama-kvarn config + KV-cache class.** Port src/llama-kvarn.{cpp,h} +
@@ -42,4 +46,8 @@ Our fork already carries q3_K/q2_K KV + #27109 fix on these files — must be pr
 
 ## Status log
 - 2026-08-20: branch `kvarn-cuda` created off `23ff897`. Architecture mapped. Plan written.
-  Next: P1 — bring in Q3_0/Q2_0S block structs + traits.
+- 2026-08-20: **P1 DONE** — Q3_0/Q2_0S fallback KV types wired (11 files) + built + validated
+  (`-ctk q3_0`/`q2_0s` generate on Gemma 4 E4B). Next: **P2** — KVarN ggml ops (GGML_OP_KVARN_WHT
+  = Walsh-Hadamard + GGML_OP_KVARN_STORE): enum in ggml.h, op wiring in ggml.c, CPU impl in
+  ggml-cpu/ops.cpp, CUDA impl (port kvarn-wht.cu + kvarn.cu). Reference: beellama ggml.h
+  GGML_OP_KVARN_WHT/STORE + ggml/src/ggml-cuda/kvarn-wht.{cu,cuh}, kvarn.{cu,cuh}.

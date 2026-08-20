@@ -456,6 +456,90 @@ void dequantize_row_q2_0(const block_q2_0 * GGML_RESTRICT x, float * GGML_RESTRI
     }
 }
 
+// KVarN fallback storage types (ported verbatim from Anbeeld/beellama.cpp)
+void quantize_row_q3_0_ref(const float * GGML_RESTRICT x, block_q3_0 * GGML_RESTRICT y, int64_t k) {
+    static const int qk = QK3_0;
+    assert(k % qk == 0);
+    const int nb = k / qk;
+
+    for (int i = 0; i < nb; i++) {
+        float amax = 0.0f;
+        float max  = 0.0f;
+        for (int j = 0; j < qk; j++) {
+            const float v = x[i*qk + j];
+            if (amax < fabsf(v)) { amax = fabsf(v); max = v; }
+        }
+        const float d  = max / -4;
+        const float id = d ? 1.0f/d : 0.0f;
+        y[i].d = GGML_FP32_TO_FP16(d);
+
+        uint32_t qh = 0;
+        memset(y[i].qs, 0, sizeof(y[i].qs));
+        for (int j = 0; j < qk; ++j) {
+            const float x0 = x[i*qk + j]*id;
+            const uint8_t xi0 = MIN(7, (int8_t)(x0 + 4.5f));
+            y[i].qs[j % (qk/4)] |= (xi0 & 0x03) << (2*(j / (qk/4)));
+            qh |= ((xi0 & 0x04u) >> 2) << j;
+        }
+        memcpy(&y[i].qh, &qh, sizeof(qh));
+    }
+}
+
+void dequantize_row_q3_0(const block_q3_0 * GGML_RESTRICT x, float * GGML_RESTRICT y, int64_t k) {
+    static const int qk = QK3_0;
+    assert(k % qk == 0);
+    const int nb = k / qk;
+
+    for (int i = 0; i < nb; i++) {
+        const float d = GGML_FP16_TO_FP32(x[i].d);
+        uint32_t qh;
+        memcpy(&qh, x[i].qh, sizeof(qh));
+        for (int j = 0; j < qk; ++j) {
+            const int32_t q = ((x[i].qs[j % (qk/4)] >> (2*(j / (qk/4)))) & 0x03) | (((qh >> j) & 1) << 2);
+            y[i*qk + j] = (q - 4)*d;
+        }
+    }
+}
+
+void quantize_row_q2_0s_ref(const float * GGML_RESTRICT x, block_q2_0s * GGML_RESTRICT y, int64_t k) {
+    static const int qk = QK2_0S;
+    assert(k % qk == 0);
+    const int nb = k / qk;
+
+    for (int i = 0; i < nb; i++) {
+        float amax = 0.0f;
+        float max  = 0.0f;
+        for (int j = 0; j < qk; j++) {
+            const float v = x[i*qk + j];
+            if (amax < fabsf(v)) { amax = fabsf(v); max = v; }
+        }
+        const float d  = max / -2;
+        const float id = d ? 1.0f/d : 0.0f;
+        y[i].d = GGML_FP32_TO_FP16(d);
+
+        memset(y[i].qs, 0, sizeof(y[i].qs));
+        for (int j = 0; j < qk; ++j) {
+            const float x0 = x[i*qk + j]*id;
+            const uint8_t xi0 = MIN(3, (int8_t)(x0 + 2.5f));
+            y[i].qs[j % (qk/4)] |= (xi0 & 0x03) << (2*(j / (qk/4)));
+        }
+    }
+}
+
+void dequantize_row_q2_0s(const block_q2_0s * GGML_RESTRICT x, float * GGML_RESTRICT y, int64_t k) {
+    static const int qk = QK2_0S;
+    assert(k % qk == 0);
+    const int nb = k / qk;
+
+    for (int i = 0; i < nb; i++) {
+        const float d = GGML_FP16_TO_FP32(x[i].d);
+        for (int j = 0; j < qk; ++j) {
+            const int32_t q = (x[i].qs[j % (qk/4)] >> (2*(j / (qk/4)))) & 0x03;
+            y[i*qk + j] = (q - 2)*d;
+        }
+    }
+}
+
 void dequantize_row_q4_0(const block_q4_0 * GGML_RESTRICT x, float * GGML_RESTRICT y, int64_t k) {
     static const int qk = QK4_0;
 

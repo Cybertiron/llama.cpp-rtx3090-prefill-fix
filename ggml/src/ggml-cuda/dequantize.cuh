@@ -43,6 +43,40 @@ static __device__ __forceinline__ void dequantize_q2_0(const void * vx, const in
     v.y = (c1 - 1) * d;
 }
 
+// KVarN fallback storage (ported from Anbeeld/beellama.cpp)
+static __device__ __forceinline__ void dequantize_q3_0(const void * vx, const int64_t ib, const int iqs, float2 & v){
+    const block_q3_0 * x = (const block_q3_0 *) vx;
+
+    const float d = x[ib].d;
+
+    uint32_t qh;
+    memcpy(&qh, x[ib].qh, sizeof(qh));
+
+    const uint8_t b = x[ib].qs[iqs % (QK3_0 / 4)];
+    const int     p = iqs / (QK3_0 / 4); // plane 0 or 1; element iqs+16 lives in plane p+2
+
+    v.x = ((b >> (2*p))     & 0x03) | (((qh >> (iqs +  0)) & 1) << 2);
+    v.y = ((b >> (2*p + 4)) & 0x03) | (((qh >> (iqs + 16)) & 1) << 2);
+
+    v.x = (v.x - 4.0f) * d;
+    v.y = (v.y - 4.0f) * d;
+}
+
+static __device__ __forceinline__ void dequantize_q2_0s(const void * vx, const int64_t ib, const int iqs, float2 & v){
+    const block_q2_0s * x = (const block_q2_0s *) vx;
+
+    const float d = x[ib].d;
+
+    const uint8_t b = x[ib].qs[iqs % (QK2_0S / 4)];
+    const int     p = iqs / (QK2_0S / 4);
+
+    v.x = (b >> (2*p))     & 0x03;
+    v.y = (b >> (2*p + 4)) & 0x03;
+
+    v.x = (v.x - 2.0f) * d;
+    v.y = (v.y - 2.0f) * d;
+}
+
 static __device__ __forceinline__ void dequantize_q4_0(const void * vx, const int64_t ib, const int iqs, float2 & v){
     const block_q4_0 * x = (const block_q4_0 *) vx;
 
