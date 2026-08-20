@@ -1,5 +1,11 @@
 # q3_K KV cache type (experimental)
 
+> **Update 2026-08-20:** fixed a flash-attention kernel-routing bug that aborted
+> `q3_K`/`q2_K` on a plain single-token (batch=1) decode on Ampere — they had no
+> VEC-kernel instance and hit `GGML_ABORT` at `fattn.cu`. They now fall through to
+> the TILE/MMA f16 path for every batch size. Re-download the binary below if you
+> grabbed an earlier build. (Prefill and speculative/MTP decode were unaffected.)
+
 Adds `q3_K` (3.4375 bits/elem) as a KV cache type on the CUDA backend, for
 squeezing more context out of limited VRAM:
 
@@ -55,10 +61,10 @@ does not add a new quantization scheme.
 The same build also wires `q2_K` (~2.6 bpw) in as a KV cache type
 (`--cache-type-k q2_K --cache-type-v q2_K`), for extreme VRAM squeezing — ~24 % smaller
 than `q3_K`. It needs a super-block-scale clamp to stay finite (q2_K's `d = max_scale/15`
-overflows f16 on large KV values otherwise). It works at moderate context (Qwen3 27B, 16K
-perplexity ~+2.4 % vs f16) but is **too aggressive for long context** — a 256K
-needle-in-haystack run crashes at the first decode step after the prefill. Treat `q3_K` as
-the practical lower bound; `q2_K` is an emergency option only.
+overflows f16 on large KV values otherwise). It generates correctly, but carries a real,
+measurable quality cost — Qwen3 27B 16K perplexity is ~+2.4 % vs `f16` (about 4σ, unlike
+`q3_K` which is within noise). Treat `q3_K` as the recommended lower bound for quality;
+reach for `q2_K` only when you need the last bit of KV VRAM and can accept the degradation.
 
 ## Notes
 
