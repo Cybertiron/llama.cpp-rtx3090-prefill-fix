@@ -40,14 +40,17 @@ measured directly on that model for the **bold** rows; legacy rows follow from b
 | `q4_1`  | 5.0       | 31 %             | lossless (large)    | |
 | `q4_0`  | 4.5       | 28 %             | **lossless**        | common default |
 | **`q3_K`** | 3.4375 | 21.5 %           | **≈ lossless (+~0.1 %)** | **recommended floor** |
+| KVarN-3 † | 3.375   | 21.1 %           | ~2.5× lower KL-div than `q3_K` (beats `q4_0`) | external fork, not included |
 | **`q2_K`** | 2.625  | 16.4 %           | **+2.4 % ppl**      | experimental, extreme VRAM |
-| KVarN-3 † | ~3.0    | ~19 %            | ~2.5× better KLD/bit than `q3_K` | external fork, not included |
+| KVarN-2 † | 2.375   | 14.8 %           | behind `q3_K` (2-bit tier) | external fork, not included |
 
-> † **KVarN** (variance-aware KV quant from the separate
-> [Anbeeld/beellama.cpp](https://github.com/Anbeeld/beellama.cpp) fork, **not** in this build) landed
-> ~2.5× closer to `f16` per bit than `q3_K` in a KL-divergence test — the more interesting
-> quality-per-bit direction. Its catch on the Qwen3-Next hybrid: the large recurrent-state cache
-> forces two GPUs, defeating the single-24 GB-card goal, so this fork ships `q3_K`/`q2_K` instead.
+> † **KVarN** (variance-normalized KV quant from the separate
+> [Anbeeld/beellama.cpp](https://github.com/Anbeeld/beellama.cpp) fork, **not** in this build). On the
+> 27B, perplexity can't separate KV quants (all within noise), so they were ranked by KL-divergence vs
+> `f16`: `kvarn3` 0.0016 < `q4_0` 0.0020 < `q3_K` 0.0039. The 3.375-bit `kvarn3` lands ~2.5× closer to
+> `f16` than the 3.44-bit `q3_K` and even beats `q4_0`; the 2.375-bit `kvarn2` falls behind `q3_K` (bit
+> gap too wide). Catch on the Qwen3-Next hybrid: KVarN's large recurrent-state cache forces two GPUs,
+> defeating the single-24 GB-card goal, so this fork ships `q3_K`/`q2_K` instead.
 
 ## Tested across models
 

@@ -137,14 +137,18 @@ bit-width (higher bits than `q4_0`, which measured lossless on this model).
 | `q4_1`  | 5.0       | 31 %             | lossless (large)    | |
 | `q4_0`  | 4.5       | 28 %             | **lossless**        | common default |
 | **`q3_K`** | 3.4375 | 21.5 %           | **≈ lossless (+~0.1 %)** | **recommended floor** |
+| KVarN-3 †  | 3.375  | 21.1 %           | ~2.5× lower KL-div than `q3_K` (beats `q4_0`) | external fork; not included |
 | **`q2_K`** | 2.625  | 16.4 %           | **+2.4 % ppl**      | experimental, extreme VRAM |
-| KVarN-3 †  | ~3.0   | ~19 %            | ~2.5× better KLD/bit than `q3_K` | external fork; not included here |
+| KVarN-2 †  | 2.375  | 14.8 %           | behind `q3_K` (2-bit tier) | external fork; not included |
 
-> † **KVarN** is a variance-aware KV quantization from the separate
+> † **KVarN** is a variance-normalized KV quantization from the separate
 > [Anbeeld/beellama.cpp](https://github.com/Anbeeld/beellama.cpp) fork — **not** part of this build.
-> In a KL-divergence comparison its 3-bit variant landed ~2.5× closer to `f16` per bit than `q3_K`,
-> so it is the more interesting research direction for quality-per-bit. The catch for this fork's use
-> case: on the Qwen3-Next hybrid its large recurrent-state cache forces the model across **two GPUs**,
+> On the 27B, perplexity cannot separate KV quants at all (everything is within noise), so these were
+> ranked by **KL-divergence** against the `f16` model: `kvarn3` 0.0016 < `q4_0` 0.0020 < `q3_K` 0.0039.
+> So the 3.375-bit `kvarn3` lands ~2.5× closer to `f16` than the 3.44-bit `q3_K`, and even beats `q4_0` —
+> the more interesting quality-per-bit direction. The 2.375-bit `kvarn2`, however, falls behind `q3_K`
+> (the bit gap is too wide to make up), so `q3_K` still wins that tier. The catch for this fork's use
+> case: on the Qwen3-Next hybrid KVarN's large recurrent-state cache forces the model across **two GPUs**,
 > which defeats the "fit a big context on one 24 GB card" goal — hence `q3_K`/`q2_K` here instead.
 
 ### Tested across models
