@@ -45,8 +45,21 @@ Our fork already carries q3_K/q2_K KV + #27109 fix on these files — must be pr
       ggml_backend_cuda_kvarn_ops (device_capabilities STUBBED to cc>=Turing until P4 FA).
       Full build clean (CUDA+CPU+server); f16 sanity gen OK. Not runtime-tested yet (needs P3
       to wire ops into a graph). CPU compute falls through to default (CUDA-only, fine).
-- [ ] **P3 — llama-kvarn config + KV-cache class.** Port src/llama-kvarn.{cpp,h} +
-      llama-kv-cache-kvarn.{cpp,h}; wire cparams.kvarn, llama.h enums, arg.cpp parsing.
+- [~] **P3 — llama-kvarn config + KV-cache integration.** ADAPTED-MINIMAL path (user choice):
+      keep the fork's existing KV-cache core (llama_memory_i unchanged, zero regression risk to
+      dsv4/iswa/hybrid), integrate KVarN on top via the materialize->standard-FA path. NOT porting
+      beellama's 2951-line llama-kv-cache-kvarn.cpp + its ~20 extra llama_memory_i virtuals +
+      placement/tail-request.
+      - [x] **P3a DONE (3805149):** config layer — llama.h enum llama_kvarn_type + llama_kvarn_params
+            + API, ggml.h enum ggml_flash_attn_ext_kvarn_domain, llama-kvarn.cpp/h (descriptors,
+            tile layout, attention planning) verbatim. llama.dll builds clean.
+      - [ ] **P3b (NEXT, hard, novel code):** allocate KVarN cache tensors (records i8 + stage f16)
+            and wire the graph — on write call ggml_kvarn_store; on read call ggml_kvarn_materialize
+            -> f16 K/V -> standard ggml_flash_attn_ext. arg.cpp: parse `kvarn2`/`kvarn3` -> set the
+            llama_kvarn_type config. This is the riskiest part (new integration glue, not a port).
+            Design decision needed: extend existing llama_kv_cache with a kvarn storage mode, or a
+            thin wrapper cache. Reference beellama llama-kv-cache-kvarn.cpp for the store/materialize
+            call shapes (tensor dims, stage_groups, indices), but write minimal glue for our core.
 - [ ] **P4 — FA KVarN CUDA kernels.** fattn-kvarn-dispatch/vec + fattn-mma-kvarn-* + the
       needed template instances (start k3-v3, k2-v2). Wire fattn.cu domain routing.
 - [ ] **P5 — build + validate.** Full CUDA build; needle @256K kvarn3/kvarn2 vs beellama.
