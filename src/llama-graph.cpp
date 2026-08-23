@@ -2509,19 +2509,6 @@ ggml_tensor * llm_graph_context::build_attn_mha(
                  int   il) const {
     const bool v_trans = v->nb[1] > v->nb[2];
 
-    // KVarN: K is stored WHT-rotated + quantized (Q3_0/Q2_0S) by the kvarn cache.
-    // Rotate the (small) query by the same orthonormal WHT so attention scores are
-    // computed in the rotated domain: <WHT q, WHT k> == <q, k>. This keeps K
-    // quantized in the cache (no full-precision materialization) while delivering
-    // the variance-normalization benefit. Gate on the kvarn env AND the storage
-    // type, so plain `-ctk q3_0/q2_0s` (no WHT) and non-kvarn caches are untouched.
-    // Credit: KVarN = @Anbeeld/beellama.cpp (ggml_kvarn_wht).
-    static const bool kvarn_k_env = getenv("LLAMA_KVARN_K") != nullptr;
-    if (kvarn_k_env && (k->type == GGML_TYPE_Q3_0 || k->type == GGML_TYPE_Q2_0S) &&
-        (q->ne[0] == 128 || q->ne[0] == 256 || q->ne[0] == 512)) {
-        q = ggml_kvarn_wht(ctx0, ggml_cont(ctx0, q), (int) q->ne[0]);
-    }
-
     // split the batch into streams if needed
     const auto n_stream = k->ne[3];
 
