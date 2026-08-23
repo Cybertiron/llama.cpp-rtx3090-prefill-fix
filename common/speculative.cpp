@@ -925,8 +925,9 @@ struct common_speculative_impl_draft_dflash : public common_speculative_impl {
     int32_t     block_size    = 0;
     llama_token mask_token_id = 0;
 
-    bool    is_dflash2     = false;
-    int32_t selector_top_k = 0;
+    bool    is_dflash2         = false;
+    bool    sample_from_anchor = true;
+    int32_t selector_top_k     = 0;
     std::vector<std::mt19937> selector_rng;
     std::vector<bool> selector_reset;
 
@@ -983,7 +984,7 @@ struct common_speculative_impl_draft_dflash : public common_speculative_impl {
 
         // DFlash input is [id_last, <mask> * (block_size-1)]: in-place denoising yields at most
         // block_size-1 draft tokens, DSpark yield a full block_size draft tokens
-        const int32_t n_draft_max = is_dspark ? block_size : block_size - 1;
+        const int32_t n_draft_max = is_dspark && sample_from_anchor ? block_size : block_size - 1;
         if (this->params.n_max > n_draft_max || this->params.n_min > n_draft_max) {
             LOG_WRN("%s: requested draft size (n_max=%d, n_min=%d) exceeds the trained block size %d -- clamping to %d\n",
                     __func__, this->params.n_max, this->params.n_min, block_size, n_draft_max);
@@ -1176,7 +1177,7 @@ struct common_speculative_impl_draft_dflash : public common_speculative_impl {
 
             const int32_t n_draft = params.n_max;
 
-            const int32_t n_block_tokens = n_draft + (is_dspark ? 0 : 1);
+            const int32_t n_block_tokens = n_draft + (is_dspark && sample_from_anchor ? 0 : 1);
             i_block_beg[seq_id] = batch.n_tokens;
             n_block    [seq_id] = n_block_tokens;
             for (int32_t i = 0; i < n_block_tokens; ++i) {
