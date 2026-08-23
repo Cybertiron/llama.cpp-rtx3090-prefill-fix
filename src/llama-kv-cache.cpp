@@ -84,12 +84,15 @@ llama_kv_cache::llama_kv_cache(
     v_cells_impl(other ? other->v_cells_impl : std::make_shared<llama_kv_cells_vec>()),
     v_cells(*v_cells_impl) {
 
-    // KVarN (simplified): enable WHT variance-normalization for K/V from env,
-    // exported by arg.cpp when the user selects -ctk/-ctv kvarn2 / kvarn3.
+    // KVarN (simplified): WHT variance-normalization on K only. K is stored
+    // WHT-rotated + quantized and stays quantized in VRAM (the query is rotated
+    // in build_attn_mha instead of un-rotating K). V is stored plain-quantized.
+    // Set from env, exported by arg.cpp for -ctk/-ctv kvarn2 / kvarn3.
     kvarn_k = getenv("LLAMA_KVARN_K") != nullptr;
     kvarn_v = getenv("LLAMA_KVARN_V") != nullptr;
     if (kvarn_k || kvarn_v) {
-        fprintf(stderr, "[KVARN] WHT variance-normalization enabled: k=%d v=%d\n", (int) kvarn_k, (int) kvarn_v);
+        fprintf(stderr, "[KVARN] enabled: K WHT variance-norm=%d (quantized cache), V plain-quant=%d\n",
+                (int) kvarn_k, (int) kvarn_v);
         fflush(stderr);
     }
 
@@ -1295,12 +1298,11 @@ ggml_tensor * llama_kv_cache::get_k(ggml_context * ctx, int32_t il, uint32_t n_k
             ggml_row_size(k->type, n_embd_k_gqa*kv_size),
             ggml_row_size(k->type, n_embd_k_gqa*kv_size)*sinfo.s0);
 
-    // KVarN: dequantize to f16 + inverse (== forward, involutory) WHT to recover K.
-    const int64_t nhk = hparams.n_embd_head_k(il);
-    if (kvarn_k && (nhk == 128 || nhk == 256 || nhk == 512)) {
-        return ggml_kvarn_wht(ctx, ggml_cast(ctx, kview, GGML_TYPE_F32), (int) nhk);
-    }
-
+    // KVarN: K is stored WHT-rotated + quantized. Return the quantized view
+    // AS-IS (no dequant) so flash-attn / mul_mat read it on the fly and the KV
+    // cache stays quantized in VRAM. The query is rotated by the same WHT in
+    // build_attn_mha (orthonormal: <WHT q, WHT k> == <q, k>), so we must NOT
+    // un-rotate here (that would force a full F32 materialization = VRAM blowup).
     return kview;
 }
 
@@ -1326,12 +1328,8 @@ ggml_tensor * llama_kv_cache::get_v(ggml_context * ctx, int32_t il, uint32_t n_k
                 ggml_row_size(v->type, n_embd_v_gqa*kv_size),           // v->nb[3]
                 ggml_row_size(v->type, n_embd_v_gqa*kv_size)*sinfo.s0);
 
-        // KVarN: dequantize to f16 + inverse WHT (involutory) to recover V.
-        const int64_t nhv = hparams.n_embd_head_v(il);
-        if (kvarn_v && (nhv == 128 || nhv == 256 || nhv == 512)) {
-            return ggml_kvarn_wht(ctx, ggml_cast(ctx, vview, GGML_TYPE_F32), (int) nhv);
-        }
-
+        // KVarN: V is stored plain-quantized (no WHT — see cpy_v). Return the
+        // quantized view AS-IS so the KV cache stays quantized in VRAM.
         return vview;
     }
 
@@ -1395,10 +1393,11 @@ ggml_tensor * llama_kv_cache::cpy_v(ggml_context * ctx, ggml_tensor * v_cur, ggm
     const int64_t n_head      = v_cur->ne[1];
     const int64_t n_tokens    = v_cur->ne[2];
 
-    // KVarN: variance-normalize V before the quantized store (FA path, !v_trans).
-    if (kvarn_v && !v_trans && (n_embd_head == 128 || n_embd_head == 256 || n_embd_head == 512)) {
-        v_cur = ggml_kvarn_wht(ctx, ggml_cont(ctx, v_cur), (int) n_embd_head);
-    }
+    // KVarN: V is stored PLAIN-quantized (no WHT). Rotating V would require
+    // un-rotating the attention *output* (which flows through v_mla / MLA /
+    // soft-cap branches in build_attn_mha) — error-prone for little gain, since
+    // V tolerates plain quantization well. Only K gets WHT variance-norm; both
+    // K and V stay quantized in the cache, so VRAM matches q2_0s/q3_0.
 
     const int64_t n_embd_gqa = n_embd_head*n_head;
 
