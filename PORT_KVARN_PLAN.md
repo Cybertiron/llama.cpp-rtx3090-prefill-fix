@@ -86,3 +86,17 @@ Our fork already carries q3_K/q2_K KV + #27109 fix on these files — must be pr
   calls ggml_kvarn_store/view/materialize. This makes the ops runtime-reachable and testable
   end-to-end (materialize path -> standard FA; native FA kvarn kernels are P4). Watch: base
   divergence in llama-kv-cache.cpp/llama-graph.cpp (our fork already carries q3_K/q2_K there).
+
+## RESULT (2026-08-20): kvarn2/kvarn3 WORKING via simplified WHT
+Commit ab704fe. Path chosen: SIMPLIFIED WHT (not the full beellama port).
+- kvarn2 -> Q2_0S storage + WHT; kvarn3 -> Q3_0 storage + WHT (Walsh-Hadamard
+  variance-normalization, the core of KVarN). WHT is involutory (H*H=I).
+- cpy_k/cpy_v: WHT(k_cur) before quantized set_rows. get_k/get_v: dequantize to
+  F32 (ggml_cast; CPU dup lacks quant->F16) then WHT again -> recovers K/V with
+  quant error spread uniformly. Enabled per K/V via env LLAMA_KVARN_K/V exported
+  by arg.cpp for -ctk/-ctv kvarn2/kvarn3. Guarded to head_dim in {128,256,512}.
+- Validated: [KVARN] k=1 v=1 + coherent gen on Gemma 4 E4B (head 512, kvarn2+3)
+  and Qwen3.8-27B (head 256, kvarn3). Works through iswa + hybrid caches.
+- Omitted vs full beellama KVarN: per-tile Sinkhorn scales, 128-token exact tail,
+  native rotated-domain FA. Those live in the git stash (OpenAI faithful-port
+  half-merge, which was broken: incompatible cparams/enums with this fork's base).
