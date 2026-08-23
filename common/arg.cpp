@@ -327,11 +327,30 @@ static ggml_type kv_cache_type_from_str(const std::string & s) {
     throw std::runtime_error("Unsupported cache type: " + s);
 }
 
+// KVarN (simplified): kvarn2/kvarn3 store into Q2_0S/Q3_0 but with Walsh-Hadamard
+// variance-normalization applied by the KV cache. We signal the cache via an env
+// var (avoids threading a flag through llama_context_params/cparams). Returns true
+// if the value was a kvarn type and sets *out to the underlying storage type.
+static bool kvarn_kv_cache_type(const std::string & s, bool is_key, ggml_type * out) {
+    int bits = 0;
+    if (s == "kvarn2") bits = 2;
+    else if (s == "kvarn3") bits = 3;
+    else return false;
+    *out = (bits == 2) ? GGML_TYPE_Q2_0S : GGML_TYPE_Q3_0;
+#ifdef _WIN32
+    _putenv_s(is_key ? "LLAMA_KVARN_K" : "LLAMA_KVARN_V", "1");
+#else
+    setenv(is_key ? "LLAMA_KVARN_K" : "LLAMA_KVARN_V", "1", 1);
+#endif
+    return true;
+}
+
 static std::string get_all_kv_cache_types() {
     std::ostringstream msg;
     for (const auto & type : kv_cache_types) {
         msg << ggml_type_name(type) << (&type == &kv_cache_types.back() ? "" : ", ");
     }
+    msg << ", kvarn2, kvarn3";
     return msg.str();
 }
 
@@ -2437,7 +2456,12 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             ggml_type_name(params.cache_type_k)
         ),
         [](common_params & params, const std::string & value) {
-            params.cache_type_k = kv_cache_type_from_str(value);
+            ggml_type kvarn_t;
+            if (kvarn_kv_cache_type(value, /*is_key=*/true, &kvarn_t)) {
+                params.cache_type_k = kvarn_t;
+            } else {
+                params.cache_type_k = kv_cache_type_from_str(value);
+            }
         }
     ).set_env("LLAMA_ARG_CACHE_TYPE_K"));
     add_opt(common_arg(
@@ -2450,7 +2474,12 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             ggml_type_name(params.cache_type_v)
         ),
         [](common_params & params, const std::string & value) {
-            params.cache_type_v = kv_cache_type_from_str(value);
+            ggml_type kvarn_t;
+            if (kvarn_kv_cache_type(value, /*is_key=*/false, &kvarn_t)) {
+                params.cache_type_v = kvarn_t;
+            } else {
+                params.cache_type_v = kv_cache_type_from_str(value);
+            }
         }
     ).set_env("LLAMA_ARG_CACHE_TYPE_V"));
     add_opt(common_arg(

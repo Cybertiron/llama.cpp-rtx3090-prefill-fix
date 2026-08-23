@@ -244,6 +244,16 @@ private:
 
     bool v_trans = true;  // the value tensor is transposed
 
+    // KVarN (simplified): Walsh-Hadamard variance-normalization around the quantized
+    // KV store. write: WHT(K) then quantize (Q3_0/Q2_0S); read: dequantize then WHT.
+    // WHT is involutory (H*H=I) -> recovers K/V minus quant error, which the rotation
+    // spreads uniformly => better low-bit fidelity than plain q3_0. Set from env
+    // LLAMA_KVARN_K / LLAMA_KVARN_V (arg.cpp exports them for -ctk kvarn2/kvarn3).
+    // Core idea of Anbeeld/beellama.cpp KVarN (ggml_kvarn_wht); per-tile Sinkhorn +
+    // exact tail are NOT included in this simplified variant.
+    bool kvarn_k = false;
+    bool kvarn_v = false;
+
     // precision tail size (exact recent K/V tokens); 0 = disabled. Set via env LLAMA_KV_TAIL.
     uint32_t n_tail = 0;
 

@@ -84,6 +84,15 @@ llama_kv_cache::llama_kv_cache(
     v_cells_impl(other ? other->v_cells_impl : std::make_shared<llama_kv_cells_vec>()),
     v_cells(*v_cells_impl) {
 
+    // KVarN (simplified): enable WHT variance-normalization for K/V from env,
+    // exported by arg.cpp when the user selects -ctk/-ctv kvarn2 / kvarn3.
+    kvarn_k = getenv("LLAMA_KVARN_K") != nullptr;
+    kvarn_v = getenv("LLAMA_KVARN_V") != nullptr;
+    if (kvarn_k || kvarn_v) {
+        fprintf(stderr, "[KVARN] WHT variance-normalization enabled: k=%d v=%d\n", (int) kvarn_k, (int) kvarn_v);
+        fflush(stderr);
+    }
+
     // shared cells view the source cache's K/V tensors, so the cell count
     // follows the source allocation: a fitted target can be smaller than the
     // draft default and oversized views would overflow the source tensors
@@ -1279,12 +1288,20 @@ ggml_tensor * llama_kv_cache::get_k(ggml_context * ctx, int32_t il, uint32_t n_k
 
     const uint32_t ns = sinfo.s1 - sinfo.s0 + 1;
 
-    return ggml_view_4d(ctx, k,
+    ggml_tensor * kview = ggml_view_4d(ctx, k,
             hparams.n_embd_head_k(il), hparams.n_head_kv(il), n_kv, ns,
             ggml_row_size(k->type, hparams.n_embd_head_k(il)),
             ggml_row_size(k->type, n_embd_k_gqa),
             ggml_row_size(k->type, n_embd_k_gqa*kv_size),
             ggml_row_size(k->type, n_embd_k_gqa*kv_size)*sinfo.s0);
+
+    // KVarN: dequantize to f16 + inverse (== forward, involutory) WHT to recover K.
+    const int64_t nhk = hparams.n_embd_head_k(il);
+    if (kvarn_k && (nhk == 128 || nhk == 256 || nhk == 512)) {
+        return ggml_kvarn_wht(ctx, ggml_cast(ctx, kview, GGML_TYPE_F32), (int) nhk);
+    }
+
+    return kview;
 }
 
 ggml_tensor * llama_kv_cache::get_v(ggml_context * ctx, int32_t il, uint32_t n_kv, const slot_info & sinfo) const {
@@ -1302,12 +1319,20 @@ ggml_tensor * llama_kv_cache::get_v(ggml_context * ctx, int32_t il, uint32_t n_k
 
     if (!v_trans) {
         // note: v->nb[1] <= v->nb[2]
-        return ggml_view_4d(ctx, v,
+        ggml_tensor * vview = ggml_view_4d(ctx, v,
                 hparams.n_embd_head_v(il), hparams.n_head_kv(il), n_kv, ns,
                 ggml_row_size(v->type, hparams.n_embd_head_v(il)),          // v->nb[1]
                 ggml_row_size(v->type, n_embd_v_gqa),                   // v->nb[2]
                 ggml_row_size(v->type, n_embd_v_gqa*kv_size),           // v->nb[3]
                 ggml_row_size(v->type, n_embd_v_gqa*kv_size)*sinfo.s0);
+
+        // KVarN: dequantize to f16 + inverse WHT (involutory) to recover V.
+        const int64_t nhv = hparams.n_embd_head_v(il);
+        if (kvarn_v && (nhv == 128 || nhv == 256 || nhv == 512)) {
+            return ggml_kvarn_wht(ctx, ggml_cast(ctx, vview, GGML_TYPE_F32), (int) nhv);
+        }
+
+        return vview;
     }
 
     // note: v->nb[1] > v->nb[2]
@@ -1329,6 +1354,11 @@ ggml_tensor * llama_kv_cache::cpy_k(ggml_context * ctx, ggml_tensor * k_cur, ggm
     const int64_t n_embd_head = k_cur->ne[0];
     const int64_t n_head      = k_cur->ne[1];
     const int64_t n_tokens    = k_cur->ne[2];
+
+    // KVarN: variance-normalize K (Walsh-Hadamard) before the quantized store.
+    if (kvarn_k && (n_embd_head == 128 || n_embd_head == 256 || n_embd_head == 512)) {
+        k_cur = ggml_kvarn_wht(ctx, ggml_cont(ctx, k_cur), (int) n_embd_head);
+    }
 
     const int64_t n_embd_gqa = n_embd_head*n_head;
 
@@ -1364,6 +1394,11 @@ ggml_tensor * llama_kv_cache::cpy_v(ggml_context * ctx, ggml_tensor * v_cur, ggm
     const int64_t n_embd_head = v_cur->ne[0];
     const int64_t n_head      = v_cur->ne[1];
     const int64_t n_tokens    = v_cur->ne[2];
+
+    // KVarN: variance-normalize V before the quantized store (FA path, !v_trans).
+    if (kvarn_v && !v_trans && (n_embd_head == 128 || n_embd_head == 256 || n_embd_head == 512)) {
+        v_cur = ggml_kvarn_wht(ctx, ggml_cont(ctx, v_cur), (int) n_embd_head);
+    }
 
     const int64_t n_embd_gqa = n_embd_head*n_head;
 
