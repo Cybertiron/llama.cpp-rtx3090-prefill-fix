@@ -148,6 +148,30 @@ types keep speculative decoding working — you get small KV **and** drafting at
 | **`kvarn3`** | **0.350** |
 | beellama `kvarn2` (reference) | 0.315 |
 
+### Throughput — low-bit KV keeps DFlash fast on code
+
+Speculative-decoding throughput is strongly **task-dependent**: on predictable, structured output
+(code) the drafter is accepted often, so decode runs several times faster than plain generation; on
+free-form prose acceptance is low and the speedup mostly disappears. On a short code prompt (generate
+`merge_intervals`), Qwen3.6-27B with the DFlash drafter (`--spec-draft-n-max 15`, greedy, ctx 8192,
+single RTX 3090), decode throughput across KV types:
+
+| KV cache | Decode (tok/s) | Draft acceptance |
+| -------- | -------------: | ---------------- |
+| `q8_0`   | 124.9 | 0.54 |
+| `q4_0`   | 121.7 | 0.54 |
+| `q3_K`   | 117.2 | 0.54 |
+| **`kvarn3`** | **117.0** | **0.54** |
+| **`kvarn2`** | **114.9** | **0.49** |
+| `f16`    | 113.1 | 0.49 |
+| `q2_K`   | 109.8 | 0.49 |
+
+Every KV type clears **100 tok/s** here, and the spread is small (partly small acceptance-path
+differences between quants). `kvarn3` matches `q3_K`/`q4_0` throughput while using less KV VRAM — so a
+low-bit KV cache costs essentially nothing for speculative decoding on code. The catch is the task,
+not the KV type: the *same* setup on a free-form prose prompt drops to **~30 tok/s** (low acceptance),
+regardless of KV quant.
+
 ---
 
 ## Tested across models
