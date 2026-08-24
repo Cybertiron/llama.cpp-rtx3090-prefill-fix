@@ -170,24 +170,27 @@ the DFlash drafter loaded. **VRAM** is at a filled 16 K-token context; **decode 
 | `q2_K`       | 2.625  | 22.2 GB | 109.8 | ~85K |
 | **`kvarn2`** | 2.5    | **22.2 GB** | 114.9 | **~95K** |
 
-**Qwen3.8-27B + DFlash2** (`--spec-draft-n-max 7`; same hybrid arch, a little more headroom than 3.6):
+**Qwen3.8-27B + DFlash2** (`--spec-draft-n-max 7`; same hybrid arch, but noticeably lighter than 3.6 —
+it fits much larger contexts):
 
-| KV cache | Bits | VRAM @16K | Decode t/s |
-| -------- | ---: | --------: | ---------: |
-| `q8_0`       | 8.5    | 21.1 GB | 53.4 |
-| `q4_0`       | 4.5    | 20.8 GB | 52.3 |
-| `q3_K`       | 3.44   | 20.7 GB | 50.4 |
-| **`kvarn3`** | 3.5    | 20.7 GB | 50.2 |
-| `q2_K`       | 2.625  | 20.6 GB | 52.2 |
-| **`kvarn2`** | 2.5    | **20.6 GB** | **55.1** |
+| KV cache | Bits | VRAM @16K | Decode t/s | Max context (24 GB) |
+| -------- | ---: | --------: | ---------: | ------------------- |
+| `q8_0`       | 8.5    | 21.1 GB | 53.4 | ~100K |
+| `q4_0`       | 4.5    | 20.8 GB | 52.3 | ~150K |
+| `q3_K`       | 3.44   | 20.7 GB | 50.4 | ~200K |
+| **`kvarn3`** | 3.5    | 20.7 GB | 50.2 | ~200K |
+| `q2_K`       | 2.625  | 20.6 GB | 52.2 | ~220K |
+| **`kvarn2`** | 2.5    | **20.6 GB** | **55.1** | **~240K** (near the 262K model limit) |
 
 **How to read it.** Throughput barely moves across KV types (all within ~10 %) — decode speed is
-dominated by draft acceptance, not the KV quant. What changes a lot is **max context**: `kvarn2`/`q2_K`
-reach ~2.5–3× the context of `q8_0` before OOM, because their KV cache is ~3× smaller. So pick the
-*highest*-bit type whose max context covers your workload — `q8_0` if you never exceed ~30 K, down to
-`kvarn2`/`q2_K` when you need 80 K+. `kvarn3` and `q3_K` are the balanced middle. (On these Qwen3-Next
-hybrids the VRAM spread at 16 K is small — most layers are linear-attention, so only a few carry a
-quantizable KV cache — but the gap compounds with context and decides the OOM point.)
+dominated by draft acceptance, not the KV quant. What changes a lot is **max context**: the low-bit
+types reach **~2.5–3× the context of `q8_0`** before OOM, because their KV cache is ~3× smaller. So pick
+the *highest*-bit type whose max context covers your workload — `q8_0` for shorter runs, down to
+`kvarn2`/`q2_K` when you want to push toward the model's full 262K; `kvarn3`/`q3_K` are the balanced
+middle. Absolute numbers are very model-dependent: Qwen3.6 caps `q8_0` at ~34K while the lighter Qwen3.8
+reaches ~100K — but within each model the *ordering* by KV bits is the same. (On these Qwen3-Next hybrids
+the VRAM spread at 16 K is small — most layers are linear-attention, so only a few carry a quantizable KV
+cache — but the gap compounds with context and decides the OOM point.)
 
 > **Throughput is task-dependent.** The code-prompt numbers above are a *best case*: structured output
 > is highly predictable, so the DFlash drafter is accepted often (mean ~8–9 tokens per step). On
