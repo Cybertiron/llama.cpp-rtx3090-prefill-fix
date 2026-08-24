@@ -148,29 +148,51 @@ types keep speculative decoding working — you get small KV **and** drafting at
 | **`kvarn3`** | **0.350** |
 | beellama `kvarn2` (reference) | 0.315 |
 
-### Throughput — low-bit KV keeps DFlash fast on code
+### Choosing a KV type: context vs VRAM vs speed
 
-Speculative-decoding throughput is strongly **task-dependent**: on predictable, structured output
-(code) the drafter is accepted often, so decode runs several times faster than plain generation; on
-free-form prose acceptance is low and the speedup mostly disappears. On a short code prompt (generate
-`merge_intervals`), Qwen3.6-27B with the DFlash drafter (`--spec-draft-n-max 15`, greedy, ctx 8192,
-single RTX 3090), decode throughput across KV types:
+The whole point of a low-bit KV cache is the three-way trade-off between **max context**, **min VRAM**,
+and **max throughput** on a single 24 GB card. Higher-bit types (`q8_0`) decode fastest but run out of
+VRAM soonest; lower-bit types (`kvarn2`, `q2_K`) reach far larger contexts for a small speed cost.
 
-| KV cache | Decode (tok/s) | Draft acceptance |
-| -------- | -------------: | ---------------- |
-| `q8_0`   | 124.9 | 0.54 |
-| `q4_0`   | 121.7 | 0.54 |
-| `q3_K`   | 117.2 | 0.54 |
-| **`kvarn3`** | **117.0** | **0.54** |
-| **`kvarn2`** | **114.9** | **0.49** |
-| `f16`    | 113.1 | 0.49 |
-| `q2_K`   | 109.8 | 0.49 |
+All measurements below: single RTX 3090, `--flash-attn on`, `--split-mode none`, `--parallel 1`, with
+the DFlash drafter loaded. **VRAM** is at a filled 16 K-token context; **decode t/s** is on a code prompt
+(spec-decode shines on structured output — see the task note below); **max context** is the largest
+`--ctx-size` that still loads on 24 GB.
 
-Every KV type clears **100 tok/s** here, and the spread is small (partly small acceptance-path
-differences between quants). `kvarn3` matches `q3_K`/`q4_0` throughput while using less KV VRAM — so a
-low-bit KV cache costs essentially nothing for speculative decoding on code. The catch is the task,
-not the KV type: the *same* setup on a free-form prose prompt drops to **~30 tok/s** (low acceptance),
-regardless of KV quant.
+**Qwen3.6-27B + DFlash** (`--spec-draft-n-max 15`):
+
+| KV cache | Bits | VRAM @16K | Decode t/s | Max context (24 GB) |
+| -------- | ---: | --------: | ---------: | ------------------- |
+| `q8_0`       | 8.5    | 22.6 GB | **124.9** | ~34K |
+| `q4_0`       | 4.5    | 22.3 GB | 121.7 | ~60K |
+| `q3_K`       | 3.44   | 22.2 GB | 117.2 | ~68K |
+| **`kvarn3`** | 3.5    | 22.2 GB | 117.0 | ~68K |
+| `q2_K`       | 2.625  | 22.2 GB | 109.8 | ~85K |
+| **`kvarn2`** | 2.5    | **22.2 GB** | 114.9 | **~95K** |
+
+**Qwen3.8-27B + DFlash2** (`--spec-draft-n-max 7`; same hybrid arch, a little more headroom than 3.6):
+
+| KV cache | Bits | VRAM @16K | Decode t/s |
+| -------- | ---: | --------: | ---------: |
+| `q8_0`       | 8.5    | 21.1 GB | 53.4 |
+| `q4_0`       | 4.5    | 20.8 GB | 52.3 |
+| `q3_K`       | 3.44   | 20.7 GB | 50.4 |
+| **`kvarn3`** | 3.5    | 20.7 GB | 50.2 |
+| `q2_K`       | 2.625  | 20.6 GB | 52.2 |
+| **`kvarn2`** | 2.5    | **20.6 GB** | **55.1** |
+
+**How to read it.** Throughput barely moves across KV types (all within ~10 %) — decode speed is
+dominated by draft acceptance, not the KV quant. What changes a lot is **max context**: `kvarn2`/`q2_K`
+reach ~2.5–3× the context of `q8_0` before OOM, because their KV cache is ~3× smaller. So pick the
+*highest*-bit type whose max context covers your workload — `q8_0` if you never exceed ~30 K, down to
+`kvarn2`/`q2_K` when you need 80 K+. `kvarn3` and `q3_K` are the balanced middle. (On these Qwen3-Next
+hybrids the VRAM spread at 16 K is small — most layers are linear-attention, so only a few carry a
+quantizable KV cache — but the gap compounds with context and decides the OOM point.)
+
+> **Throughput is task-dependent.** The code-prompt numbers above are a *best case*: structured output
+> is highly predictable, so the DFlash drafter is accepted often (mean ~8–9 tokens per step). On
+> free-form prose the *same* setup drops to **~25–35 tok/s** for every KV type — acceptance, not the KV
+> quant, dominates.
 
 ---
 
