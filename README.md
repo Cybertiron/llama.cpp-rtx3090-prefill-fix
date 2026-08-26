@@ -1,3 +1,24 @@
+> ## 👉 I've moved to vLLM — [vllm-syv-qwen38-windows-wsl2-easy](https://github.com/Cybertiron/vllm-syv-qwen38-windows-wsl2-easy)
+>
+> This llama.cpp fork still works and the binaries are fine, but I now run **Qwen3.8-27B
+> on vLLM** instead, and I'd point you there first. Two reasons:
+>
+> 1. **It's much faster on the same RTX 3090** — ~**165 tok/s** single-stream (DFlash2,
+>    int4) versus llama.cpp here.
+> 2. **It serves subagents.** Several agents run in parallel against one server, which is
+>    what I actually needed. Concurrency lifts **aggregate throughput to ~318 tok/s at 8
+>    subagents (~1.8× a single stream)** — and that matters more to me than raw
+>    single-stream speed.
+>
+> On the low-bit KV cache (`kvarn2`/`kvarn3` here; KVarN `CTX=huge` there): it **slows
+> generation a lot** — you trade decode speed for a much larger context that the VRAM
+> saving buys. Handy when you truly need the context, but for my use the **subagent
+> throughput is the bigger win**, so vLLM is where I'm spending my time now.
+>
+> The four Ampere fixes below still stand — I've just shifted focus.
+
+---
+
 # llama.cpp — RTX 3090 / Ampere KV-cache + speculative-decoding fork
 
 A fork of [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) focused on fitting **large
