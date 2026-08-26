@@ -10,10 +10,9 @@
 >    subagents (~1.8× a single stream)** — and that matters more to me than raw
 >    single-stream speed.
 >
-> On the low-bit KV cache (`kvarn2`/`kvarn3` here; KVarN `CTX=huge` there): it **slows
-> generation a lot** — you trade decode speed for a much larger context that the VRAM
-> saving buys. Handy when you truly need the context, but for my use the **subagent
-> throughput is the bigger win**, so vLLM is where I'm spending my time now.
+> (The low-bit KV cache in *this* fork — `kvarn2`/`kvarn3`, with the Walsh–Hadamard
+> rotation — stays fast; it does **not** slow generation here. The decode slowdown from a
+> low-bit KV cache that I write about is specific to vLLM's KVarN, over in that repo.)
 >
 > The four Ampere fixes below still stand — I've just shifted focus.
 
