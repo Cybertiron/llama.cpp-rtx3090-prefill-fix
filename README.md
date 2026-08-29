@@ -272,3 +272,12 @@ MIT, same as upstream llama.cpp.
 - **Walsh–Hadamard KV rotation** (`attn_rot`): upstream llama.cpp PR [#21038](https://github.com/ggml-org/llama.cpp/pull/21038).
 - **DFlash2** speculative decoding: @SubSir (upstream DFlash2 PR), cherry-picked unchanged.
 - Fork changes by [@Cybertiron](https://github.com/Cybertiron).
+
+
+---
+
+## ☕ Support
+
+If this project saved you time, consider [**buying me a coffee**](https://buymeacoffee.com/cybertiron) — it fuels more open-source fixes and tooling. Thank you!
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/cybertiron)
