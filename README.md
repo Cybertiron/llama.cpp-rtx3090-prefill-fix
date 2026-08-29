@@ -280,4 +280,4 @@ MIT, same as upstream llama.cpp.
 
 If this project saved you time, consider [**buying me a coffee**](https://buymeacoffee.com/cybertiron) — it fuels more open-source fixes and tooling. Thank you!
 
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/cybertiron)
+[![Buy Me A Coffee](https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=%E2%98%95&slug=cybertiron&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff)](https://buymeacoffee.com/cybertiron)
